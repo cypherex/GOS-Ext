@@ -1,5 +1,5 @@
 
-local Heroes = {"Swain"}
+local Heroes = {"Swain","RekSai"}
 if not table.contains(Heroes, myHero.charName) then return end
 
 require "DamageLib"
@@ -9,9 +9,6 @@ require "GGPrediction"
 ------------
 
 -- Spell data for GGPrediction
-local qSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.075, Width = 100, Range = 750, Speed = 5000, Collision = false}
-local eSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.075, Width = 60, Range = 850, Speed = 935, Collision = false}
-local wSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1, Radius = 100, Range = 5500, Speed = 935, Collision = false}
 
 -- Reference variables
 local GameHeroCount     = Game.HeroCount
@@ -99,10 +96,15 @@ end
 -- Swain
 --------------
 class "Swain"
+    local qSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.075, Width = 100, Range = 750, Speed = 5000, Collision = false}
+    local eSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.075, Width = 60, Range = 850, Speed = 935, Collision = false}
+    local wSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1, Radius = 100, Range = 5500, Speed = 935, Collision = false}
+        
     function Swain:__init()	     
-        print("devSwain Loaded") 
+        print("devX-Swain Loaded") 
         self:LoadMenu()   
-         
+        
+        
         Callback.Add("Draw", function() self:Draw() end)           
         Callback.Add("Tick", function() self:onTickEvent() end)    
     end
@@ -149,8 +151,6 @@ class "Swain"
     --------------------------------------------------
     -- Callbacks
     ------------
-
-
     function Swain:onTickEvent()
         if isSpellReady(_W) then
             self:rootCheck()
@@ -180,10 +180,10 @@ class "Swain"
                     if doesThisChampionHaveBuff(enemy, "swaineroot") then
                         if isSpellReady(_W) and distance < wSpellData.Range and self.Menu.Auto.W:Value() then
                             Control.CastSpell(HK_W, enemy.pos)
-                            _G.SDK.Orbwalker:SetAttack(false)
+                            orbwalker:SetAttack(false)
                             DelayAction(
                                 function()
-                                    _G.SDK.Orbwalker:SetAttack(true)
+                                    orbwalker:SetAttack(true)
                                     if distance < 900 then
                                         local pos = enemy.toScreen
                                         Control.LeftClick(pos.x, pos.y)      
@@ -239,12 +239,150 @@ class "Swain"
         end
     end
 
+----------------------------------------------------
+-- RekSai
+--------------------- 
+class "RekSai"
+    local QspellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.3, Speed = 4000, Range = 1625, Radius = 60, Collision = true, CollisionTypes = {GGPrediction.COLLISION_MINION}}
+    local isTunnelling = false
+    local isUnderground = false
+
+    function RekSai:__init()	     
+        print("devX-RekSai Loaded") 
+
+        self:LoadMenu()   
+        
+        Callback.Add("Draw", function() self:Draw() end)           
+        Callback.Add("Tick", function() self:onTickEvent() end)   
+        orbwalker:OnPostAttack(function(...) self:onPostAttack(...) end) 
+    end
+
+    --
+    -- Menu 
+    function RekSai:LoadMenu() --MainMenu
+        self.Menu = MenuElement({type = MENU, id = "devRekSai", name = "devX-Reksai v1.0"})
+                
+        -- ComboMenu  
+        self.Menu:MenuElement({type = MENU, id = "Combo", name = "Combo Mode"})
+            self.Menu.Combo:MenuElement({id = "AttackReset", name = "Use Q&E on Attack Reset", value = true})
+            self.Menu.Combo:MenuElement({id = "UseQ", name = "[Q]", value = true})
+            self.Menu.Combo:MenuElement({id = "UseE", name = "[E]", value = true})
+            self.Menu.Combo:MenuElement({id = "UseW", name = "[W] to unburrow", value = true})
+
+        
+        self.Menu:MenuElement({type = MENU, id = "Harass", name = "Harass Mode"})
+
+        -- Auto Menu
+        self.Menu:MenuElement({type = MENU, id = "Auto", name = "Auto"})
+        
+            
+        self.Menu:MenuElement({type = MENU, id = "Draw", name = "Draw"})
+            self.Menu.Draw:MenuElement({id = "Q", name = "Underground [Q] Range", value = true})
+    end
+
+    function RekSai:Draw()
+        if myHero.dead then return end
+                                                    
+        if self.Menu.Draw.Q:Value() then
+            Draw.Circle(myHero, QspellData.Range, 1, Draw.Color(225, 225, 0, 10))
+        end
+    end
+
+
+    --------------------------------------------------
+    -- Callbacks
+    ------------
+
+    function RekSai:onPostAttack(args)
+        if self.Menu.Combo.AttackReset:Value() then
+            local target = orbwalker:GetTarget();
+        
+            if isSpellReady(_Q) and target and self.Menu.Combo.UseQ:Value() then
+                Control.CastSpell(HK_Q, target)
+                
+                --return
+            end
+            
+            if isSpellReady(_E) and target and self.Menu.Combo.UseE:Value() then
+                local distance = getDistance(myHero.pos, target.pos)
+                if distance < 350 then
+                    Control.CastSpell(HK_E, target)
+                end
+            end
+        end
+    end
+
+    function RekSai:onTickEvent()
+        
+        self:updateBuffs()
+        
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] and not isInTunnelling then
+            self:Combo()
+        end
+
+    end
+    ----------------------------------------------------
+    -- Combat Functions
+    ---------------------
+
+    function RekSai:updateBuffs()
+        -- Check if currently burrowed
+        if doesMyChampionHaveBuff("RekSaiW") then
+            isUnderground = true
+        else
+            isUnderground = false
+        end
+        
+        -- Check if currently tunnelling
+        if doesMyChampionHaveBuff("reksaitunneltime2") or doesMyChampionHaveBuff("RekSaiEBurrowed") then
+            isInTunnelling = true
+        else
+            isInTunnelling = false
+        end
+    end
+    ----------------------------------------------------
+    -- Combat Modes
+    ---------------------
+    function RekSai:Combo()
+        
+        local target = _G.SDK.TargetSelector:GetTarget(1600, _G.SDK.DAMAGE_TYPE_MAGICAL);
+        if isUnderground and target then
+            local distance = getDistance(myHero.pos, target.pos)
+            if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < 1600 and self.Menu.Combo.UseQ:Value() then
+                print("Use Q")
+                castSpell(QspellData, HK_Q, target)
+            end
+
+            if distance < 285 and isSpellReady(_W) and self.Menu.Combo.UseW:Value() then
+                Control.CastSpell(HK_W)
+            end
+        elseif not self.Menu.Combo.AttackReset:Value() and target then
+            target = _G.SDK.TargetSelector:GetTarget(500, _G.SDK.DAMAGE_TYPE_MAGICAL)
+            if isSpellReady(_Q) and target and self.Menu.Combo.UseQ:Value()  then
+                Control.CastSpell(HK_Q, target)
+                DelayAction(function()
+                    orbwalker:__OnAutoAttackReset()           
+                end,0.05) 
+                return
+            end
+             
+            if isSpellReady(_E) and target and self.Menu.Combo.UseE:Value() then
+                local distance = getDistance(myHero.pos, target.pos)
+                if distance < 350 then
+                    Control.CastSpell(HK_E, target)
+                end
+            end
+            
+        end
+    end
+
+    function RekSai:Harass()
+        
+    end
 
 ----------------------------------------------------
 -- Script starts here
 ---------------------
-
-    
 function onLoadEvent()
     if table.contains(Heroes, myHero.charName) then
 		_G[myHero.charName]()
