@@ -58,6 +58,15 @@ local function doesMyChampionHaveBuff(buffName)
     return false
 end
 
+local function printChampionBuffs(champ)
+    for i = 0, champ.buffCount do
+        local buff = champ:GetBuff(i)
+        if buff.count > 0 then 
+            print(string.format("%s - stacks: %f count %f",buff.name, buff.stacks, buff.count))
+        end
+    end
+end
+
 local function doesThisChampionHaveBuff(target, buffName)
     for i = 0, target.buffCount do
         local buff = target:GetBuff(i)
@@ -66,6 +75,19 @@ local function doesThisChampionHaveBuff(target, buffName)
         end
     end
     return false
+end
+
+local function isTargetImmobile(target)
+    local buffTypeList = {5, 8, 12, 22, 23, 25, 30, 35} 
+	for i = 0, target.buffCount do
+        local buff = target:GetBuff(i)
+        for _, buffType in pairs(buffTypeList) do
+		    if buff.type == buffType and buff.count > 0 then
+                return true, buff.duration
+            end
+		end
+	end
+	return false, 0
 end
 
 local function isValid(unit)
@@ -152,10 +174,11 @@ class "Swain"
     -- Callbacks
     ------------
     function Swain:onTickEvent()
+        wSpellData.Range = myHero:GetSpellData(_W).range
+
         if isSpellReady(_W) then
             self:rootCheck()
         end
-
         if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
             self:Combo()
         end
@@ -171,36 +194,25 @@ class "Swain"
         
         local enemies = getEnemyHeroes()
         
-        -- Auto W if swain rooted
-        if self.Menu.Auto.W:Value() or self.Menu.Auto.PullRoot:Value() then
-            for i, enemy in pairs(enemies) do
-                if isValid(enemy) and not enemy.dead  then
-                    local distance = getDistance(myHero.pos, enemy.pos)
 
-                    if doesThisChampionHaveBuff(enemy, "swaineroot") then
-                        if isSpellReady(_W) and distance < wSpellData.Range and self.Menu.Auto.W:Value() then
-                            Control.CastSpell(HK_W, enemy.pos)
-                            orbwalker:SetAttack(false)
-                            DelayAction(
-                                function()
-                                    orbwalker:SetAttack(true)
-                                    if distance < 900 then
-                                        local pos = enemy.toScreen
-                                        Control.LeftClick(pos.x, pos.y)      
-                                    end
-                                end,
-                                1
-                            ) 
-                        elseif distance < 900 then
-                                local pos = enemy.toScreen
-                                Control.LeftClick(pos.x, pos.y)      
-                                return
-                        end
-                        
-                    end
+        for i, enemy in pairs(enemies) do
+            if isValid(enemy) and not enemy.dead  then
+
+                local distance = getDistance(myHero.pos, enemy.pos)
+                local isImmobile, duration = isTargetImmobile(enemy)
+
+                if isSpellReady(_W) and self.Menu.Auto.W:Value() and distance <  wSpellData.Range and isImmobile then
+                    local enemyPos = enemy.pos:ToMM()
+                    Control.CastSpell(HK_W, enemyPos.x, enemyPos.y)
+                end
+                
+                if distance < 1125 and doesThisChampionHaveBuff(enemy, "swaineroot") then
+                    Control.Attack(enemy)  
                 end
             end
         end
+
+
     end
 
     ----------------------------------------------------
@@ -297,10 +309,10 @@ class "RekSai"
         if self.Menu.Combo.AttackReset:Value() then
             local target = orbwalker:GetTarget();
         
-            if isSpellReady(_Q) and target and self.Menu.Combo.UseQ:Value() then
+            if isSpellReady(_Q) and target and self.Menu.Combo.UseQ:Value()  then
                 Control.CastSpell(HK_Q, target)
-                
-                --return
+                Control.Attack(target)
+                return
             end
             
             if isSpellReady(_E) and target and self.Menu.Combo.UseE:Value() then
@@ -340,6 +352,7 @@ class "RekSai"
             isInTunnelling = false
         end
     end
+
     ----------------------------------------------------
     -- Combat Modes
     ---------------------
@@ -349,7 +362,6 @@ class "RekSai"
         if isUnderground and target then
             local distance = getDistance(myHero.pos, target.pos)
             if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < 1600 and self.Menu.Combo.UseQ:Value() then
-                print("Use Q")
                 castSpell(QspellData, HK_Q, target)
             end
 
@@ -360,9 +372,7 @@ class "RekSai"
             target = _G.SDK.TargetSelector:GetTarget(500, _G.SDK.DAMAGE_TYPE_MAGICAL)
             if isSpellReady(_Q) and target and self.Menu.Combo.UseQ:Value()  then
                 Control.CastSpell(HK_Q, target)
-                DelayAction(function()
-                    orbwalker:__OnAutoAttackReset()           
-                end,0.05) 
+                Control.Attack(target)
                 return
             end
              
@@ -373,6 +383,21 @@ class "RekSai"
                 end
             end
             
+        end
+    end
+
+
+    function UltimateMode()
+        if isSpellReady(_R) then
+            for i, enemy in pairs(enemies) do
+                if isValid(enemy) and not enemy.dead  then
+
+                    if doesThisChampionHaveBuff(enemy, "reksairprey") then
+                        
+                        local distance = getDistance(myHero.pos, enemy.pos)
+                    end
+                end
+            end
         end
     end
 
