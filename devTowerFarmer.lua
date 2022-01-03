@@ -117,7 +117,7 @@ class "TowerFarmer"
             end
             -- Try to prep minions of there is  no last hittable minions
             for i, check in pairs(minionChecks) do
-                if not check.minion.dead and check.hitsToPrep == 1 then
+                if not check.minion.dead and check.hitsToPrep == 1 and i > 1 then
                     if Orbwalker:CanAttack(check.minion) then
                         self.heroTargetMinion = check.minion
                         Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,0,0,255))
