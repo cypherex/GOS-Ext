@@ -30,7 +30,7 @@ class "TowerFarmer"
     end
 
     function TowerFarmer:createMenu()
-        self.Menu = MenuElement({type = MENU, id = "devFarmer", name = "DevX TowerFarmer"})
+        self.Menu = MenuElement({type = MENU, id = "devFarmer", name = "DevX TowerFarmer v0.01"})
         
         self.Menu:MenuElement({id = "Enabled", name = "Enabled", value = true, toggle=true})
             
