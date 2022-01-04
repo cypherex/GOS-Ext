@@ -1,5 +1,5 @@
 
-local Heroes = {"Swain","RekSai"}
+local Heroes = {"Swain","RekSai","Elise"}
 if not table.contains(Heroes, myHero.charName) then return end
 
 require "DamageLib"
@@ -11,6 +11,8 @@ require "GGPrediction"
 -- Spell data for GGPrediction
 
 -- Reference variables
+local GameTurret = Game.Turret
+local GameTurretCount = Game.TurretCount
 local GameHeroCount     = Game.HeroCount
 local GameHero          = Game.Hero
 local TableInsert       = _G.table.insert
@@ -42,6 +44,17 @@ local function getEnemyHeroes()
     for i = 1, Game.HeroCount() do
         local Hero = Game.Hero(i)
         if Hero.isEnemy then
+            table.insert(EnemyHeroes, Hero)
+        end
+    end
+    return EnemyHeroes
+end
+
+local function getEnemyHeroesWithinDistance(distance)
+    local EnemyHeroes = {}
+    for i = 1, Game.HeroCount() do
+        local Hero = Game.Hero(i)
+        if Hero.isEnemy and not Hero.dead and myHero.pos:DistanceTo(Hero) < distance then
             table.insert(EnemyHeroes, Hero)
         end
     end
@@ -112,6 +125,23 @@ local function castSpellExtended(spellData, hotkey, target, extendAmount)
         local castPos = Vector(pred.CastPosition):Extended(Vector(myHero.pos), extendAmount) 
         Control.CastSpell(hotkey, castPos)	
     end
+end
+
+local function isBeingAttackedByTower()
+    for i = 1, GameTurretCount() do
+        local turret = GameTurret(i)
+        if turret.isEnemy and not turret.dead and not turret.isImmortal then
+            if turret.targetID == myHero.networkID then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function getTowerDamage()
+    local minutes = Game.Timer() / 60
+    return 9 * math.floor(minutes - 1.5) + 170
 end
 
 --------------------------------------------------
@@ -405,6 +435,159 @@ class "RekSai"
         
     end
 
+
+    class "Elise"
+  
+    function Elise:__init()	     
+        print("DevX-Elise Loaded") 
+
+        self:LoadMenu()   
+        
+        self.eSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.3, Speed = 1600, Range = 1075, Radius = 55, Width=55, Collision = true, CollisionTypes = {GGPrediction.COLLISION_MINION}}
+    
+        Callback.Add("Draw", function() self:Draw() end)           
+        Callback.Add("Tick", function() self:onTickEvent() end)   
+        orbwalker:OnPostAttack(function(...) self:onPostAttack(...) end )
+        
+    end
+
+    function Elise:LoadMenu() --MainMenu
+        self.Menu = MenuElement({type = MENU, id = "devElise", name = "DevX-Elise v1.0"})
+        
+        self.Menu:MenuElement({type = MENU, id = "ELogic", name = "Rappel Logic"})
+            self.Menu.ELogic:MenuElement({TYPE = _G.SPACE, name = "Auto Rappel will be active if being attacked by a tower that can kill"})
+            self.Menu.ELogic:MenuElement({id = "HP", name = "Percent HP", value = 25, min = 0, max = 100})
+
+        self.Menu:MenuElement({id = "Clear", name = "Lane / JG Clear - Use Abilities", value = true, toggle = true, key = string.byte("T")})
+    end
+
+    function Elise:Draw()
+        if myHero.dead then return end
+    end
+
+
+    --------------------------------------------------
+    -- Callbacks
+    ------------
+
+    function Elise:onPostAttack(args)
+        local target = orbwalker:GetTarget();
+        if target and isSpellReady(_Q) and self.isInSpiderForm then
+            Control.CastSpell(HK_Q, target)
+        end
+    end
+
+    function Elise:onTickEvent()
+        self:updateBuffs()
+        self:autoRappel()
+        
+        if orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+            self:Combo()
+        end
+        if self.Menu.Clear:Value() and (orbwalker.Modes[_G.SDK.ORBWALKER_MODE_JUNGLECLEAR] or orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR]) then
+            self:Clear()
+        end
+        
+    end
+    ----------------------------------------------------
+    -- Combat Functions
+    ---------------------
+
+    function Elise:updateBuffs()
+        self.isInSpiderForm = doesMyChampionHaveBuff("EliseR")
+        self.isRapelled = myHero:GetSpellData(_Q).name == "EliseSpideElnitial"
+    end
+
+    function Elise:autoRappel()
+        if self.isRapelled then return end
+        
+        local shouldRappel = false
+
+        if isBeingAttackedByTower() then
+            local towerDamage = getTowerDamage()
+            if towerDamage >= myHero.health then
+                shouldRappel = true
+            end
+        end
+
+        local percentHp = myHero.health / myHero.maxHealth
+        if percentHp < self.Menu.ELogic.HP:Value() / 100 and #getEnemyHeroesWithinDistance(800) >= 1 then
+            shouldRappel = true
+        end
+
+        if shouldRappel then
+            if self.isInSpiderForm then
+                Control.CastSpell(HK_E)
+            else
+                Control.CastSpell(HK_R)
+                Control.CastSpell(HK_E)
+            end
+        end
+    end
+
+    
+    ----------------------------------------------------
+    -- Combat Modes
+    ---------------------
+    function Elise:Combo()
+        local target = orbwalker:GetTarget(1200, _G.SDK.DAMAGE_TYPE_MAGICAL)
+        if target then
+            if not self.isInSpiderForm then
+                if isSpellReady(_E) and myHero.pos:DistanceTo(target.pos) <= 1075 then
+                    castSpell(self.eSpellData, HK_E, target)
+                end
+                if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) <= 625 then
+                    Control.CastSpell(HK_Q, target)
+                end
+                if isSpellReady(_W) and myHero.pos:DistanceTo(target.pos) <= 950 then
+                    Control.CastSpell(HK_W, target)
+                end
+                if isSpellReady(_R) and not isSpellReady(_Q) and not isSpellReady(_W) then
+                    Control.CastSpell(HK_R)
+                    self.isInSpiderForm = true
+                end
+            end 
+            if self.isInSpiderForm then
+                
+                if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) <= 475 then
+                    Control.CastSpell(HK_Q, target)
+                end
+                if isSpellReady(_W) and myHero.pos:DistanceTo(target.pos) <= 700 then
+                    Control.CastSpell(HK_W, target)
+                end
+            end
+        end
+    end
+
+
+    function Elise:Clear()
+        local target = orbwalker:GetTarget()
+        if target then
+            if not self.isInSpiderForm then
+                if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) <= 625 then
+                    Control.CastSpell(HK_Q, target)
+                end
+                if isSpellReady(_W) and myHero.pos:DistanceTo(target.pos) <= 950 then
+                    Control.CastSpell(HK_W, target)
+                end
+                if isSpellReady(_R) and not isSpellReady(_Q) and not isSpellReady(_W) then
+                    Control.CastSpell(HK_R)
+                    self.isInSpiderForm = true
+                end
+            end 
+            if self.isInSpiderForm then
+                if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) <= 475 then
+                    Control.CastSpell(HK_Q, target)
+                end
+                if isSpellReady(_W) and myHero.pos:DistanceTo(target.pos) <= 700 then
+                    Control.CastSpell(HK_W, target)
+                end
+            end
+        end
+    end
+
+    
+
 ----------------------------------------------------
 -- Script starts here
 ---------------------
@@ -412,7 +595,7 @@ function onLoadEvent()
     if table.contains(Heroes, myHero.charName) then
 		_G[myHero.charName]()
     else
-        print ("devSwain does not support " + myHero.charName)
+        print ("DevX-AIO does not support " + myHero.charName)
     end
 end
 
