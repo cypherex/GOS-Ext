@@ -27,19 +27,23 @@ class "TowerFarmer"
 
         self.isEnabled = false
         self:createMenu()
+
     end
 
     function TowerFarmer:createMenu()
-        self.Menu = MenuElement({type = MENU, id = "devFarmer", name = "DevX TowerFarmer v0.01"})
+        self.Menu = MenuElement({type = MENU, id = "devFarmer", name = "DevX TowerFarmer"})
         
         self.Menu:MenuElement({id = "Enabled", name = "Enabled", value = true, toggle=true})
             
         self.Menu:MenuElement({type = MENU, id = "Draw", name = "Draw"})
             self.Menu.Draw:MenuElement({id = "Debug", name = "Debug", value = false})
     end
+
+
     -------------------------------------------------
     -- State functions  
     ------------
+
 
     function TowerFarmer:onTick()
         self.isEnabled = false
@@ -50,20 +54,26 @@ class "TowerFarmer"
             if #self.turretMinions > 0 then
                 
                 self.isEnabled = true
+
                 Orbwalker:SetAttack(false)
+
                 self.minionChecks = self:checkMinions(self.turretMinions)
                 if self.minionChecks then
                     self:farmMinions(self.minionChecks)
                 end
                 Orbwalker:SetAttack(true)
             end
-            
         end
     end
 
 
     function TowerFarmer:onDraw()
         if self.closestTower and self.closestTower.visible and self.Menu.Draw.Debug:Value() then
+            
+            Draw.Text(string.format("Last Hit: %s", self.attackingLastHit), 10, 15, 60, Draw.Color(150,0,255,0))
+            Draw.Text(string.format("1 Hit Prep: %s", self.attackingOneHitPrep), 10, 15, 70, Draw.Color(150,0,255,0))
+            Draw.Text(string.format("2 Hit Prep: %s", self.attackingTwoHitPrep), 10, 15, 80, Draw.Color(150,0,255,0))
+
             Draw.Circle(self.closestTower.pos, self.closestTower.boundingRadius + 775)
             
             if self.turretMinions and #self.turretMinions > 0  then
@@ -74,26 +84,32 @@ class "TowerFarmer"
                 Draw.Text(string.format("AtkSpeed: %s", self.closestTower.attackSpeed), 10, self.closestTower.pos2D.x, self.closestTower.pos2D.y+ 45, Draw.Color(150,255,0,0))
 
                 for i, minion in pairs(self.turretMinions) do
-                    Draw.Text(string.format("#%s", i), 10, minion.pos2D.x, minion.pos2D.y, Draw.Color(50,255,0,0))
+                    Draw.Text(string.format("#%s", i), 10, minion.pos2D.x, minion.pos2D.y, Draw.Color(150,255,0,0))
                 end
                 
                 for i, check in pairs(self.minionChecks) do      
-                    Draw.Text(string.format("HP: %s", check.remainingHP), 10, check.minion.pos2D.x, check.minion.pos2D.y + 10, Draw.Color(50,255,0,0))
-                    Draw.Text(string.format("LH: %s - LH2: %s - RH: %s", check.lastHittable, check.lastHittableTwoShots, check.hitsToPrep), 10, check.minion.pos2D.x, check.minion.pos2D.y + 20, Draw.Color(50,255,0,0))  
-                    Draw.Text(string.format("DMG: %s - SPD: %s", check.AADamage, check.secondsPerAttack), 10, check.minion.pos2D.x, check.minion.pos2D.y + 30, Draw.Color(50,255,0,0))
+                    Draw.Text(string.format("HP: %s", check.remainingHP), 10, check.minion.pos2D.x, check.minion.pos2D.y + 10, Draw.Color(150,255,0,0))
+                    Draw.Text(string.format("LH: %s - LH2: %s - RH: %s", check.lastHittable, check.lastHittableTwoShots, check.hitsToPrep), 10, check.minion.pos2D.x, check.minion.pos2D.y + 20, Draw.Color(150,255,0,0))  
+                    Draw.Text(string.format("DMG: %s - SPD: %s", check.AADamage, check.secondsPerAttack), 10, check.minion.pos2D.x, check.minion.pos2D.y + 30, Draw.Color(150,255,0,0))
                 end
             end
 
-            if self.towerTarget then
-                Draw.Circle(self.towerTarget.pos, self.towerTarget.boundingRadius)
-            end
+            --if self.towerTarget then
+            --    Draw.Circle(self.towerTarget.pos, self.towerTarget.boundingRadius)
+            --end
             
         end
         if self.heroTargetMinion then
-            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,0,0,255))
+            
+            local attackRange = myHero.range + myHero.boundingRadius
+            if  myHero.pos:DistanceTo(self.heroTargetMinion.pos) < attackRange then
+                Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,0,0,255))
+            else
+                Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,255,0,0))
+            end
         end
         
-        Draw.Text(string.format("DevX-TowerFarmer Active: %s", self.isEnabled), 10, 50, 50, Draw.Color(150,0,255,0))
+        Draw.Text(string.format("DevX-TowerFarmer Active: %s", self.isEnabled), 10, 15, 50, Draw.Color(150,0,255,0))
     end
 
         
@@ -102,44 +118,85 @@ class "TowerFarmer"
     ---------------------
     function TowerFarmer:farmMinions(minionChecks)
         if #minionChecks == 0 then return end
-
+        
+        
+        local attackRange = myHero.range + myHero.boundingRadius
         if #minionChecks >= 1 then
              -- Kill last-hittable
             for i, check in pairs(minionChecks) do
                 if not check.minion.dead and check.lastHittable then
                     if Orbwalker:CanAttack(check.minion) then
                         self.heroTargetMinion = check.minion
-                        Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,0,0,255))
-                        self:attackUnit(check.minion)
+                        self.attackingTwoHitPrep = false
+                        self.attackingOneHitPrep = false
+                        self.attackingLastHit = true
+                        if myHero.pos:DistanceTo(check.minion.pos) < attackRange then
+                            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,0,0,255))
+                            self:attackUnit(check.minion)
+                        else
+                            
+                            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,255,0,0))
+                        end
                         return
                     end
                 end
             end
+
+            if minionChecks[1].lastHittableSoon then
+                Draw.Circle(minionChecks[1].minion.pos, minionChecks[1].minion.boundingRadius, Draw.Color(150,0,0,255))
+                return
+            end
             -- Try to prep minions of there is  no last hittable minions
             for i, check in pairs(minionChecks) do
-                if not check.minion.dead and check.hitsToPrep == 1 and i > 1 then
+                if not check.minion.dead and check.hitsToPrep == 1 and not check.lastHittableTwoShots then
                     if Orbwalker:CanAttack(check.minion) then
+                        
+                        self.attackingTwoHitPrep = false
+                        self.attackingLastHit = false
+                        self.attackingOneHitPrep = true
                         self.heroTargetMinion = check.minion
-                        Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,0,0,255))
-                        self:attackUnit(check.minion)
+                        
+                        if myHero.pos:DistanceTo(check.minion.pos) < attackRange then
+                            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,0,0,255))
+                            local canAttack = true
+                            if i <=2 then
+                                local aaps = 1/check.secondsPerAttack
+                                if aaps*2 > 1.2 then
+                                    canAttack = false
+                                end
+                            end
+                            if canAttack then 
+                                self:attackUnit(check.minion)
+                            end
+                        else
+                            
+                            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,255,0,0))
+                        end
                         return
                     end
                 end
             end
             
-            -- Try to prep minions that need more time if there is reasonably preperabe minion
+            -- Try to prep minions that need more timerms
             for i, check in pairs(minionChecks) do
                 if  not check.minion.dead and check.hitsToPrep == 2 and not check.lastHittableTwoShots and i > 2 then
                     if Orbwalker:CanAttack(check.minion) then
                         self.heroTargetMinion = check.minion
-                        Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,0,0,255))
-                        self:attackUnit(check.minion)
+                        self.attackingTwoHitPrep = true
+                        self.attackingOneHitPrep = false
+                        self.attackingLastHit = false
+                        if myHero.pos:DistanceTo(check.minion.pos) < attackRange then
+                            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,0,0,255))
+                            self:attackUnit(check.minion)
+                        else
+                            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,255,0,0))
+                        end
                         return
                     end
                 end
             end            
-        end
         
+        end
     end
 
     function TowerFarmer:attackUnit(unit)
@@ -160,10 +217,12 @@ class "TowerFarmer"
             local distance = myHero.pos:DistanceTo(minion.pos) 
 
             local hp = HealthPrediction:GetPrediction(minion,  Attack:GetWindup() - Data:GetLatency() + distance / aaSpeed )
+            local hplhs = HealthPrediction:GetPrediction(minion,  (Attack:GetWindup()*2.4 - Data:GetLatency() + distance / aaSpeed) )
             local hp2 = HealthPrediction:GetPrediction(minion,  (Attack:GetWindup() - Data:GetLatency() + distance / aaSpeed)*2 )
 
             -- stats
             local lastHittable = false
+            local lastHittableSoon = false
             local canLastHitWithTwoShots = hp < dmg + turretDamage * 2 and hp > turretDamage * 2
             local hitsToPrep = -1
 
@@ -171,8 +230,10 @@ class "TowerFarmer"
                 lastHittable = true
                 hitsToPrep = 0
             else
-                
-                if hp - turretDamage < dmg  and hp > turretDamage then
+                if hplhs < dmg then
+                    lastHittableSoon = true
+                    hitsToPrep = 0
+                elseif hp - turretDamage < dmg  and hp > turretDamage then
                     hitsToPrep = 0
                 elseif hp2 - turretDamage < dmg*2 and hp2 > turretDamage + dmg then
                     hitsToPrep = 1
@@ -186,6 +247,7 @@ class "TowerFarmer"
                 minion =  minion,
                 hitsToPrep = hitsToPrep,
                 lastHittable = lastHittable,
+                lastHittableSoon = lastHittableSoon,
                 lastHittableTwoShots = canLastHitWithTwoShots,
                 remainingHP = hp,
                 AADamage = dmg,
@@ -236,14 +298,13 @@ class "TowerFarmer"
         local minions = {}
         
         if not turret then return minions end
-
         for i = 1, GameMinionCount() do
             local minion = GameMinion(i)
             if minion.pos:To2D().onScreen then 
                 
                 if minion.isEnemy and not minion.dead then
                     local distance = minion.pos:DistanceTo(turret.pos)
-                    if distance < 775 + turret.boundingRadius + minion.boundingRadius / 2  + 85 and not minion.dead then 
+                    if distance < 775 + turret.boundingRadius + minion.boundingRadius / 2  + 150 and not minion.dead then 
                         table.insert(minions, minion)
                     end
                 end
