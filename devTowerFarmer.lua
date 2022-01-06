@@ -14,6 +14,12 @@ local Data = _G.SDK.Data
 local Orbwalker = _G.SDK.Orbwalker
 
 local SECONDS_PER_ATTACK = 1.2
+
+require "DamageLib"
+
+local function isSpellReady(spell)
+    return  myHero:GetSpellData(spell).currentCd == 0 and myHero:GetSpellData(spell).level > 0 and Game.CanUseSpell(spell) == 0
+end
 -------------------------------------------------
 -- TowerFarmer  
 ------------
@@ -24,7 +30,9 @@ class "TowerFarmer"
         print("DevX TowerFarmer loaded")
         Callback.Add("Tick", function () self:onTick() end )
         Callback.Add("Draw", function () self:onDraw() end )
-
+        
+        
+        Orbwalker:OnPreAttack(function(...) self:onPostAttack(...) end) 
         self.isEnabled = false
         self:createMenu()
 
@@ -34,7 +42,8 @@ class "TowerFarmer"
         self.Menu = MenuElement({type = MENU, id = "devFarmer", name = "DevX TowerFarmer"})
         
         self.Menu:MenuElement({id = "Enabled", name = "Enabled", value = true, toggle=true})
-            
+        self.Menu:MenuElement({id = "CSAbility", name = "CS Assist Ability", value = 1, drop = {"None", "Q", "W", "E"}})
+    
         self.Menu:MenuElement({type = MENU, id = "Draw", name = "Draw"})
             self.Menu.Draw:MenuElement({id = "Debug", name = "Debug", value = false})
     end
@@ -43,7 +52,10 @@ class "TowerFarmer"
     -------------------------------------------------
     -- State functions  
     ------------
-
+    
+    function TowerFarmer:onPostAttack()
+        
+    end
 
     function TowerFarmer:onTick()
         self.isEnabled = false
@@ -70,27 +82,22 @@ class "TowerFarmer"
     function TowerFarmer:onDraw()
         if self.closestTower and self.closestTower.visible and self.Menu.Draw.Debug:Value() then
             
-            Draw.Text(string.format("Last Hit: %s", self.attackingLastHit), 10, 15, 60, Draw.Color(150,0,255,0))
-            Draw.Text(string.format("1 Hit Prep: %s", self.attackingOneHitPrep), 10, 15, 70, Draw.Color(150,0,255,0))
-            Draw.Text(string.format("2 Hit Prep: %s", self.attackingTwoHitPrep), 10, 15, 80, Draw.Color(150,0,255,0))
+            Draw.Text(string.format("Status: %s", self.debugStatus), 10, 15, 60, Draw.Color(200,0,255,0))
 
             Draw.Circle(self.closestTower.pos, self.closestTower.boundingRadius + 775)
             
             if self.turretMinions and #self.turretMinions > 0  then
                 
-                Draw.Text(string.format("Speed: %s", self.turretSpeed), 10, self.closestTower.pos2D.x, self.closestTower.pos2D.y+ 15, Draw.Color(150,255,0,0))
-                Draw.Text(string.format("Delay: %s", self.turretDelay), 10, self.closestTower.pos2D.x, self.closestTower.pos2D.y+ 25, Draw.Color(150,255,0,0))
-                Draw.Text(string.format("Target: %s", self.closestTower.targetID), 10, self.closestTower.pos2D.x, self.closestTower.pos2D.y+ 35, Draw.Color(150,255,0,0))
-                Draw.Text(string.format("AtkSpeed: %s", self.closestTower.attackSpeed), 10, self.closestTower.pos2D.x, self.closestTower.pos2D.y+ 45, Draw.Color(150,255,0,0))
+                Draw.Text(string.format("Speed: %s", self.turretSpeed), 10, self.closestTower.pos2D.x, self.closestTower.pos2D.y+ 15, Draw.Color(200,255,0,0))
+                Draw.Text(string.format("Delay: %s", self.turretDelay), 10, self.closestTower.pos2D.x, self.closestTower.pos2D.y+ 25, Draw.Color(200,255,0,0))
+                Draw.Text(string.format("Target: %s", self.closestTower.targetID), 10, self.closestTower.pos2D.x, self.closestTower.pos2D.y+ 35, Draw.Color(200,255,0,0))
+                Draw.Text(string.format("AtkSpeed: %s", self.closestTower.attackSpeed), 10, self.closestTower.pos2D.x, self.closestTower.pos2D.y+ 45, Draw.Color(200,255,0,0))
 
-                for i, minion in pairs(self.turretMinions) do
-                    Draw.Text(string.format("#%s", i), 10, minion.pos2D.x, minion.pos2D.y, Draw.Color(150,255,0,0))
-                end
-                
-                for i, check in pairs(self.minionChecks) do      
-                    Draw.Text(string.format("HP: %s", check.remainingHP), 10, check.minion.pos2D.x, check.minion.pos2D.y + 10, Draw.Color(150,255,0,0))
-                    Draw.Text(string.format("LH: %s - LH2: %s - RH: %s", check.lastHittable, check.lastHittableTwoShots, check.hitsToPrep), 10, check.minion.pos2D.x, check.minion.pos2D.y + 20, Draw.Color(150,255,0,0))  
-                    Draw.Text(string.format("DMG: %s - SPD: %s", check.AADamage, check.secondsPerAttack), 10, check.minion.pos2D.x, check.minion.pos2D.y + 30, Draw.Color(150,255,0,0))
+                for i, check in pairs(self.minionChecks) do     
+                    Draw.Text(string.format("#%s", i), 10, check.minion.pos2D.x, check.minion.pos2D.y, Draw.Color(200,255,0,0)) 
+                    Draw.Text(string.format("HP: %s", check.remainingHP), 10, check.minion.pos2D.x, check.minion.pos2D.y + 10, Draw.Color(200,255,0,0))
+                    Draw.Text(string.format("LH: %s - LH2: %s - RH: %s", check.lastHittable, check.lastHittableTwoShots, check.hitsToPrep), 10, check.minion.pos2D.x, check.minion.pos2D.y + 20, Draw.Color(200,255,0,0))  
+                    Draw.Text(string.format("DMG: %s - SPD: %s", check.AADamage, check.secondsPerAttack), 10, check.minion.pos2D.x, check.minion.pos2D.y + 30, Draw.Color(200,255,0,0))
                 end
             end
 
@@ -122,38 +129,52 @@ class "TowerFarmer"
         
         local attackRange = myHero.range + myHero.boundingRadius
         if #minionChecks >= 1 then
+            -- if the first highest priority minion is last hittable soon  then we dont want to waste aa
+            if minionChecks[1].lastHittableSoon then  
+                self.debugStatus = "Skipping attacks, as target minion is last hittable soon."
+                self.heroTargetMinion = minionChecks[1].minion
+                return
+            end
+            if minionChecks[1].hitsToPrep == 0 and not minionChecks[1].lastHittable then
+                self.debugStatus = "Skipping last hits, as target minion is last hittable soon."
+                self.heroTargetMinion = minionChecks[1].minion
+                return
+            end
+
+
              -- Kill last-hittable
             for i, check in pairs(minionChecks) do
                 if not check.minion.dead and check.lastHittable then
                     if Orbwalker:CanAttack(check.minion) then
                         self.heroTargetMinion = check.minion
-                        self.attackingTwoHitPrep = false
-                        self.attackingOneHitPrep = false
-                        self.attackingLastHit = true
+                        self.debugStatus = "Last hitting minion"
                         if myHero.pos:DistanceTo(check.minion.pos) < attackRange then
-                            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,0,0,255))
                             self:attackUnit(check.minion)
                         else
-                            
-                            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,255,0,0))
+
+                            if self:useAbilityUnit(minionChecks[1].minion) then
+                                self.debugStatus = "Using ability to kill unkillable minion"
+                                return
+                            end
                         end
                         return
                     end
                 end
             end
-
-            if minionChecks[1].lastHittableSoon then
-                Draw.Circle(minionChecks[1].minion.pos, minionChecks[1].minion.boundingRadius, Draw.Color(150,0,0,255))
-                return
+            
+            if minionChecks[1].turretCanKill then
+                if self:useAbilityUnit(minionChecks[1].minion) then
+                    self.debugStatus = "Using ability to kill unkillable minion"
+                    self.heroTargetMinion = minionChecks[1].minion
+                    return
+                end
             end
-            -- Try to prep minions of there is  no last hittable minions
+            -- Prep minions which need 1 attack to prep
             for i, check in pairs(minionChecks) do
-                if not check.minion.dead and check.hitsToPrep == 1 and not check.lastHittableTwoShots then
+                if not check.minion.dead and check.hitsToPrep == 1 then
                     if Orbwalker:CanAttack(check.minion) then
                         
-                        self.attackingTwoHitPrep = false
-                        self.attackingLastHit = false
-                        self.attackingOneHitPrep = true
+                        
                         self.heroTargetMinion = check.minion
                         
                         if myHero.pos:DistanceTo(check.minion.pos) < attackRange then
@@ -161,37 +182,59 @@ class "TowerFarmer"
                             local canAttack = true
                             if i <=2 then
                                 local aaps = 1/check.secondsPerAttack
-                                if aaps*2 > 1.2 then
+                                if aaps*2 < 1.2 then
                                     canAttack = false
                                 end
                             end
                             if canAttack then 
+                                self.debugStatus = "1 Hit attack preperation"
                                 self:attackUnit(check.minion)
+                                return
                             end
-                        else
-                            
-                            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,255,0,0))
                         end
-                        return
                     end
                 end
             end
             
-            -- Try to prep minions that need more timerms
+            -- Minions are last hittaable soon, so we dont want to waste aa on another minion
+            for i, check in pairs(minionChecks) do
+                if not check.minion.dead and check.lastHittableSoon and not check.lastHittableSoon then
+                    self.debugStatus = "Skipping attack as a minion is last hittable soon"
+                    return
+                end
+            end
+
+            -- These minions are unkillable if we wait for them..
+            for i, check in pairs(minionChecks) do
+                if not check.minion.dead and check.turretCanKill and i > 2 then
+                    
+                    if Orbwalker:CanAttack(check.minion) then
+                        self.heroTargetMinion = check.minion
+                        self.debugStatus = "Attacking a minion which would be unkillable by tower otherwise"
+                        if myHero.pos:DistanceTo(check.minion.pos) < attackRange then
+                            self:attackUnit(check.minion)
+                            return
+                        end
+                    else
+                        if self:useAbilityUnit(check.minion) then
+                            self.debugStatus = "Using ability to kill unkillable minion"
+                            self.heroTargetMinion = check.minion
+                            return
+                        end
+                    end
+                end
+            end
+
+            -- Try to prep minions that need 2 hits to prep
             for i, check in pairs(minionChecks) do
                 if  not check.minion.dead and check.hitsToPrep == 2 and not check.lastHittableTwoShots and i > 2 then
                     if Orbwalker:CanAttack(check.minion) then
                         self.heroTargetMinion = check.minion
-                        self.attackingTwoHitPrep = true
-                        self.attackingOneHitPrep = false
-                        self.attackingLastHit = false
+                        self.debugStatus = "Attacking minion which requires 2 hit preps"
                         if myHero.pos:DistanceTo(check.minion.pos) < attackRange then
-                            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,0,0,255))
                             self:attackUnit(check.minion)
-                        else
-                            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,255,0,0))
+                            return
                         end
-                        return
                     end
                 end
             end            
@@ -199,8 +242,30 @@ class "TowerFarmer"
         end
     end
 
-    function TowerFarmer:attackUnit(unit)
+    function TowerFarmer:useAbilityUnit(unit)
         
+        local csAbility = self.Menu.CSAbility:Value()
+        if csAbility == 1 then return false end
+
+        local spellData = {nil,_Q, _W, _E}
+        local spellData = spellData[csAbility]
+        if not isSpellReady(spellData) then return false end
+
+        local spell = {nil,"Q","W","E"}
+        local spell = spell[csAbility]
+
+        local dmg = getdmg(spell, unit, myHero)
+        if dmg > unit.health then return false end
+
+        local hotkey = {nil,HK_Q, HK_W, HK_E}
+        hotkey = hotkey[csAbility]
+
+        Control.CastSpell(hotkey, unit)
+        return true
+    end
+
+    function TowerFarmer:attackUnit(unit)
+        self.shouldBeAttacking = true
         Orbwalker:SetAttack(true)
         Orbwalker:Attack(unit)
         Orbwalker:SetAttack(false)
@@ -223,17 +288,20 @@ class "TowerFarmer"
             -- stats
             local lastHittable = false
             local lastHittableSoon = false
+            
+
             local canLastHitWithTwoShots = hp < dmg + turretDamage * 2 and hp > turretDamage * 2
+            local turretCanKill = hp < turretDamage and hp > dmg
             local hitsToPrep = -1
 
             if hp < dmg then
                 lastHittable = true
                 hitsToPrep = 0
             else
-                if hplhs < dmg then
+                if hplhs < dmg  then
                     lastHittableSoon = true
                     hitsToPrep = 0
-                elseif hp - turretDamage < dmg  and hp > turretDamage then
+                elseif (hp - turretDamage < dmg  and hp > turretDamage) or (hplhs - turretDamage < dmg and hplhs > turretDamage ) then
                     hitsToPrep = 0
                 elseif hp2 - turretDamage < dmg*2 and hp2 > turretDamage + dmg then
                     hitsToPrep = 1
@@ -249,6 +317,7 @@ class "TowerFarmer"
                 lastHittable = lastHittable,
                 lastHittableSoon = lastHittableSoon,
                 lastHittableTwoShots = canLastHitWithTwoShots,
+                turretCanKill = turretCanKill,
                 remainingHP = hp,
                 AADamage = dmg,
                 secondsPerAttack = Attack:GetWindup() - Data:GetLatency() + distance / aaSpeed 
