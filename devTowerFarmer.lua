@@ -129,6 +129,25 @@ class "TowerFarmer"
         
         local attackRange = myHero.range + myHero.boundingRadius
         if #minionChecks >= 1 then
+            --  Highest priority target is last hittable
+            if minionChecks[1].lastHittable then
+                local check = minionChecks[1]
+                if not check.minion.dead and check.hitsToPrep == 1 then
+                    self.heroTargetMinion = check.minion
+                    if Orbwalker:CanAttack(check.minion) then
+                        if myHero.pos:DistanceTo(check.minion.pos) < attackRange then
+                            self.debugStatus = "Last hit tower target"
+                            self:attackUnit(check.minion)
+                        end
+                    else
+                        if self:useAbilityUnit(check.minion) then
+                            self.debugStatus = "Using ability to kill unkillable minion"
+                        end
+                    end
+                    return
+                end
+            end
+            
             -- if the first highest priority minion is last hittable soon  then we dont want to waste aa
             if minionChecks[1].lastHittableSoon then  
                 self.debugStatus = "Skipping attacks, as target minion is last hittable soon."
@@ -173,12 +192,9 @@ class "TowerFarmer"
             for i, check in pairs(minionChecks) do
                 if not check.minion.dead and check.hitsToPrep == 1 then
                     if Orbwalker:CanAttack(check.minion) then
-                        
-                        
                         self.heroTargetMinion = check.minion
                         
                         if myHero.pos:DistanceTo(check.minion.pos) < attackRange then
-                            Draw.Circle(self.heroTargetMinion.pos, self.heroTargetMinion.boundingRadius, Draw.Color(150,0,0,255))
                             local canAttack = true
                             if i <=2 then
                                 local aaps = 1/check.secondsPerAttack
