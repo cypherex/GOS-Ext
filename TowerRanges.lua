@@ -2,7 +2,7 @@
 local function isTowerOnScreen()
     for i = 1, GameTurretCount() do
         local tower = GameTurret(i)
-        if i.pos2D.onScreen then
+        if tower.pos2D.onScreen then
             return true, tower
         end
     end
