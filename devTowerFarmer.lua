@@ -31,8 +31,6 @@ class "TowerFarmer"
         Callback.Add("Tick", function () self:onTick() end )
         Callback.Add("Draw", function () self:onDraw() end )
         
-        
-        Orbwalker:OnPreAttack(function(...) self:onPostAttack(...) end) 
         self.isEnabled = false
         self:createMenu()
 
@@ -42,7 +40,12 @@ class "TowerFarmer"
         self.Menu = MenuElement({type = MENU, id = "devFarmer", name = "DevX TowerFarmer"})
         
         self.Menu:MenuElement({id = "Enabled", name = "Enabled", value = true, toggle=true})
-        self.Menu:MenuElement({id = "CSAbility", name = "CS Assist Ability", value = 1, drop = {"None", "Q", "W", "E"}})
+        self.Menu:MenuElement({type = MENU, id = "Ability", name = "CS Assist Abilities"})
+        self.Menu.Ability:MenuElement({id = "AbilityEnabled", name = "Enabled", value = true, toggle=true})
+        self.Menu.Ability:MenuElement({id = "Use ability if windup too long", name = "AbilityWindup", value = true, toggle=true})
+        self.Menu.Ability:MenuElement({id = "CSAbilityA", name = "Spell 1", value = 1, drop = {"None", "Q", "W", "E"}})
+        self.Menu.Ability:MenuElement({id = "CSAbilityB", name = "Spell 2", value = 1, drop = {"None", "Q", "W", "E"}})
+        self.Menu.Ability:MenuElement({id = "CSAbilityC", name = "Spell 3", value = 1, drop = {"None", "Q", "W", "E"}})
     
         self.Menu:MenuElement({type = MENU, id = "Draw", name = "Draw"})
             self.Menu.Draw:MenuElement({id = "Debug", name = "Debug", value = false})
@@ -53,18 +56,15 @@ class "TowerFarmer"
     -- State functions  
     ------------
     
-    function TowerFarmer:onPostAttack()
-        
-    end
-
     function TowerFarmer:onTick()
         self.isEnabled = false
         self.closestTower = self:getClosestTurret()
+        self.towerMissile = nil
         if self.closestTower and myHero.pos:DistanceTo(self.closestTower.pos) < 1000 and Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] and self.Menu.Enabled:Value() then
             self.towerTarget = self:getTurretTarget(self.closestTower)
             self.turretMinions = self:getMinionsUnderTurret(self.closestTower)
             if #self.turretMinions > 0 then
-                
+                self:updateMissileData(self.closestTower)
                 self.isEnabled = true
 
                 Orbwalker:SetAttack(false)
@@ -134,16 +134,25 @@ class "TowerFarmer"
                 local check = minionChecks[1]
                 if not check.minion.dead and check.hitsToPrep == 1 then
                     self.heroTargetMinion = check.minion
-                    if Orbwalker:CanAttack(check.minion) then
-                        if myHero.pos:DistanceTo(check.minion.pos) < attackRange then
-                            self.debugStatus = "Last hit tower target"
-                            self:attackUnit(check.minion)
+
+                    local aaps = check.secondsPerAttack
+                    
+                    if self.towerMissile and aaps < self.towerMissile.timeRemaining and self.Menu.Ability.AbilityWindup:Value() then
+                        if self:useAbilityUnit(check.minion) then
+                            self.debugStatus = "Using ability to kill minion because can't auto fast enough"
                         end
                     else
-                        if self:useAbilityUnit(check.minion) then
-                            self.debugStatus = "Using ability to kill unkillable minion"
+                        if Orbwalker:CanAttack(check.minion) then
+                            if myHero.pos:DistanceTo(check.minion.pos) < attackRange then
+                                self.debugStatus = "Last hit tower target"
+                                self:attackUnit(check.minion)
+                            end
+                        else
+                            if self:useAbilityUnit(check.minion) then
+                                self.debugStatus = "Using ability to kill unkillable minion"
+                            end
                         end
-                    end
+                    end     
                     return
                 end
             end
@@ -258,15 +267,48 @@ class "TowerFarmer"
         end
     end
 
-    function TowerFarmer:useAbilityUnit(unit)
-        
-        local csAbility = self.Menu.CSAbility:Value()
-        if csAbility == 1 then return false end
+    function TowerFarmer:updateMissileData(tower)
+        local missile = self:getTowerMissile(tower)
+        if missile then
+            self.towerMissile = {
+                distance = missile.pos:DistanceTo(missile.endPos),
+                timeRemaining = missile.pos:DistanceTo(missile.missileData.endPos) / missile.missileData.speed
+            }
+        end
+    end
+    function TowerFarmer:getTowerMissile(tower)
+        for i = 1, GameMissileCount() do
+            local missile = GameMissile(i)
+            if missile.missileData.owner == tower.handle then
+                return missile
+            end
+        end
+        return nil
+    end
 
+    function TowerFarmer:useAbilityUnit(unit)
+        if not self.Menu.Ability.AbilityEnabled:Value() then return false end
+        for i = 1, 3 do
+            local csAbility = self:getAbilityIndex(i)
+            if csAbility > 1 then
+                if self:useAbility(unit, csAbility) then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
+    function TowerFarmer:getAbilityIndex(i)
+        local abilityValueStates = { self.Menu.Ability.CSAbilityA:Value() , self.Menu.Ability.CSAbilityB:Value(), self.Menu.Ability.CSAbilityC:Value()}
+        return abilityValueStates[i]
+    end
+
+    function TowerFarmer:useAbility(unit, csAbility)
         local spellData = {nil,_Q, _W, _E}
         local spellData = spellData[csAbility]
         if not isSpellReady(spellData) then return false end
-
+        
         local spell = {nil,"Q","W","E"}
         local spell = spell[csAbility]
 
