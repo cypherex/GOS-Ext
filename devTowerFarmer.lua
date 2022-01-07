@@ -42,7 +42,7 @@ class "TowerFarmer"
         self.Menu:MenuElement({id = "Enabled", name = "Enabled", value = true, toggle=true})
         self.Menu:MenuElement({type = MENU, id = "Ability", name = "CS Assist Abilities"})
         self.Menu.Ability:MenuElement({id = "AbilityEnabled", name = "Enabled", value = true, toggle=true})
-        self.Menu.Ability:MenuElement({id = "Use ability if windup too long", name = "AbilityWindup", value = true, toggle=true})
+        self.Menu.Ability:MenuElement({name = "Use ability if windup too long", id = "AbilityWindup", value = true, toggle=true})
         self.Menu.Ability:MenuElement({id = "CSAbilityA", name = "Spell 1", value = 1, drop = {"None", "Q", "W", "E"}})
         self.Menu.Ability:MenuElement({id = "CSAbilityB", name = "Spell 2", value = 1, drop = {"None", "Q", "W", "E"}})
         self.Menu.Ability:MenuElement({id = "CSAbilityC", name = "Spell 3", value = 1, drop = {"None", "Q", "W", "E"}})
