@@ -18,7 +18,7 @@ local SECONDS_PER_ATTACK = 1.2
 require "DamageLib"
 
 local function isSpellReady(spell)
-    return  myHero:GetSpellData(spell).currentCd == 0 and myHero:GetSpellData(spell).level > 0 and Game.CanUseSpell(spell) == 0
+    return  myHero:GetSpellData(spell).currentCd == 0 and myHero:GetSpellData(spell).level > 0 and Game.CanUseSpell(spell) == 0 and myHero:GetSpellData(spell).mana < myHero.mana
 end
 -------------------------------------------------
 -- TowerFarmer  
