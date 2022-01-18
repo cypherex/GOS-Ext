@@ -806,29 +806,21 @@ class "Syndra"
     end
 
     function Syndra:getQDamage(target)
-        local damage = 0
-        
         if myHero:GetSpellData(_Q).level > 0 and myHero:GetSpellData(_Q).level < 5 then
-            damage = getdmg("Q", target, myHero)
+            return getdmg("Q", target, myHero)
+        elseif myHero:GetSpellData(_Q).level == 5 then
+                return getdmg("Q", target, myHero) + (getdmg("Q", target, myHero)*0.25)
         end
-        
-        if myHero:GetSpellData(_Q).level == 5 then
-            damage = getdmg("Q", target, myHero) + (getdmg("Q", target, myHero)*0.25)
-        end
-        return damage
+        return 0
     end
     
     function Syndra:getWDamage(target)
-        local damage = 0
-        
         if myHero:GetSpellData(_W).level > 0 and myHero:GetSpellData(_W).level < 5 then
-            damage = getdmg("W", target, myHero)
+            return getdmg("W", target, myHero)
+        elseif myHero:GetSpellData(_W).level == 5 then
+            return getdmg("W", target, myHero) + (0.2 * (({70, 110, 150, 190, 230})[myHero:GetSpellData(_W).level] + 0.7 * myHero.ap))
         end
-        
-        if myHero:GetSpellData(_W).level == 5 then
-            damage = getdmg("W", target, myHero) + (0.2 * (({70, 110, 150, 190, 230})[myHero:GetSpellData(_W).level] + 0.7 * myHero.ap))
-        end
-        return damage
+        return 0
     end
     
     function Syndra:getBestClearMinion()
