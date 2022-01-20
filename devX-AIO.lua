@@ -1,5 +1,5 @@
 
-local Heroes = {"Swain","RekSai","Elise","Syndra"}
+local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar"}
 
 if not table.contains(Heroes, myHero.charName) then return end
 
@@ -57,17 +57,28 @@ local function getEnemyHeroes()
     return EnemyHeroes
 end
 
-local function getEnemyHeroesWithinDistance(distance)
+
+
+local function isValid(unit)
+    if (unit and unit.valid and unit.isTargetable and unit.alive and unit.visible and unit.networkID and unit.pathing and unit.health > 0) then
+        return true;
+    end
+    return false;
+end
+
+local function getEnemyHeroesWithinDistanceOfUnit(location, distance)
     local EnemyHeroes = {}
     for i = 1, Game.HeroCount() do
         local Hero = Game.Hero(i)
-        if Hero.isEnemy and not Hero.dead and myHero.pos:DistanceTo(Hero) < distance then
+        if Hero.isEnemy and not Hero.dead and Hero.pos:DistanceTo(location) < distance then
             table.insert(EnemyHeroes, Hero)
         end
     end
     return EnemyHeroes
 end
-
+local function getEnemyHeroesWithinDistance(distance)
+    return getEnemyHeroesWithinDistanceOfUnit(myHero.pos, distance)
+end
 local function doesMyChampionHaveBuff(buffName)
     for i = 0, myHero.buffCount do
         local buff = myHero:GetBuff(i)
@@ -110,13 +121,6 @@ local function isTargetImmobile(target)
 	return false, 0
 end
 
-local function isValid(unit)
-    if (unit and unit.valid and unit.isTargetable and unit.alive and unit.visible and unit.networkID and unit.pathing and unit.health > 0) then
-        return true;
-    end
-    return false;
-end
-
 local function castSpell(spellData, hotkey, target)
     local pred = GGPrediction:SpellPrediction(spellData)
     pred:GetPrediction(target, myHero)
@@ -151,6 +155,30 @@ local function getTowerDamage()
     return 9 * math.floor(minutes - 1.5) + 170
 end
 
+
+-- credit to pussy qiyana
+local function Rotate(startPos, endPos, height, theta)
+    local dx, dy = endPos.x - startPos.x, endPos.z - startPos.z
+    local px, py = dx * math.cos(theta) - dy * math.sin(theta), dx * math.sin(theta) + dy * math.cos(theta)
+    return Vector(px + startPos.x, height, py + startPos.z)
+end
+
+-- credit to pussy qiyana
+local function FindClosestWall(mode)
+    local startPos, mPos, height = Vector(myHero.pos), Vector(mousePos), myHero.pos.y
+    for i = 100, 2000, 100 do -- search range
+        local endPos = startPos:Extended(mPos, i)
+        for j = 20, 360, 20 do -- angle step
+            local testPos = Rotate(startPos, endPos, height, math.rad(j))
+            if testPos:ToScreen().onScreen then 
+                if MapPosition:inWall(testPos) then
+                    return testPos
+                end
+            end
+        end
+    end
+    return nil
+end
 
 
 local function ClosestPointOnLineSegment(p, p1, p2)
@@ -962,6 +990,199 @@ class "Syndra"
             end
         end
     end
+
+--------------------------------------------------
+-- Gangplank
+--------------
+class "Gangplank"
+        
+function Gangplank:__init()	     
+    print("devX-Gangplank Loaded") 
+    self:LoadMenu()   
+    
+    Callback.Add("Draw", function() self:Draw() end)           
+    Callback.Add("Tick", function() self:onTickEvent() end)    
+end
+
+--
+-- Menu 
+function Gangplank:LoadMenu() --MainMenu
+    self.Menu = MenuElement({type = MENU, id = "devGangplank", name = "DevX Gangplank v1.0"})
+    -- ComboMenu  
+
+    self.Menu:MenuElement({type = MENU, id = "Empty", name = "Empty"})
+end
+
+function Gangplank:Draw()
+    
+end
+
+
+--------------------------------------------------
+-- Callbacks
+------------
+function Gangplank:onTickEvent()
+
+end
+----------------------------------------------------
+-- Combat Functions
+---------------------
+
+----------------------------------------------------
+-- Other Functions
+---------------------
+
+
+
+----------------------------------------------------
+-- Combat Modes
+---------------------
+
+function Gangplank:AutoUlt()
+end
+
+function Gangplank:Combo()
+    local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+  
+end
+
+function Gangplank:Harass()
+    local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    
+   
+end
+
+function Gangplank:LaneClear()
+    
+end
+
+
+--------------------------------------------------
+-- Gnar
+--------------
+class "Gnar"
+        
+function Gnar:__init()	     
+    print("devX-Gnar Loaded") 
+    self:LoadMenu()   
+    self.QspellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.066, Speed = 1200, Range = 1100, Radius = 60, Collision = true, CollisionTypes = {GGPrediction.COLLISION_MINION}}
+    self.WspellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Speed = math.huge, Range = 525, Radius = 80, Collision = true, CollisionTypes = {GGPrediction.COLLISION_MINION}}
+    
+    Callback.Add("Tick", function() self:onTickEvent() end)    
+end
+
+--
+-- Menu 
+function Gnar:LoadMenu() --MainMenu
+    self.Menu = MenuElement({type = MENU, id = "devGnar", name = "DevX Gnar v1.0"})
+    -- ComboMenu  
+
+    self.Menu:MenuElement({type = MENU, id = "Combo", name = "Combo"})
+    self.Menu.Combo:MenuElement({name = "[E] if transforming soon", id = "ETransform", value = true, toggle = true})
+    self.Menu.Combo:MenuElement({id = "UltHP", name = "Ult if HP < x %", value = 30, min = 0, max = 110, step = 1})
+    self.Menu.Combo:MenuElement({id = "UltHeroes", name = "Ult if x enemies within wall range", value = 2, min = 0, max = 5, step = 1})
+    self.Menu.Combo:MenuElement({id = "UltAuto", name = "Auto-Ult outside of combo", value = false, toggle = true})
+end
+
+
+
+--------------------------------------------------
+-- Callbacks
+------------
+function Gnar:onTickEvent()
+    
+    self:updateBuffs()
+
+    if self.Menu.Combo.UltAuto:Value() and isSpellReady(_R) then
+        self:UltimateLogic()
+    end 
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+        self:Combo()
+    end
+
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_HARASS] then
+        self:Harass()
+    end
+
+end
+----------------------------------------------------
+-- Combat Functions
+---------------------
+
+function Gnar:UltimateLogic()
+    local wallLocation = FindClosestWall()
+
+    if wallLocation and myHero.pos:DistanceTo(wallLocation) < 400 then
+        local enemiesInRange = getEnemyHeroesWithinDistanceOfUnit(wallLocation, 550)
+
+        if #enemiesInRange > self.Menu.Combo.UltHeroes:Value() then
+            Control.CastSpell(HK_R, wallPosition)
+        elseif #enemiesInRange > 0 then
+            for i, hero in pairs(enemiesInRange) do
+                if hero.health < self.Menu.Combo.UltHP:Value() then
+                    Control.CastSpell(HK_R, wallPosition)
+                end
+            end
+        end
+    end
+end
+
+----------------------------------------------------
+-- Other Functions
+---------------------
+
+function Gnar:updateBuffs()
+    if doesMyChampionHaveBuff( "gnartransformsoon") or doesMyChampionHaveBuff( "gnartransform") then
+        self.isMega = true
+    else 
+        self.isMega = false
+    end
+
+    
+    if doesMyChampionHaveBuff( "gnarfuryhigh") or doesMyChampionHaveBuff( "gnartransformsoon")  then
+        self.transformingSoon = true
+    else 
+        self.transformingSoon = false
+    end
+end
+
+----------------------------------------------------
+-- Combat Modes
+---------------------
+
+function Gnar:Combo()
+    if isSpellReady(_R) then
+        self:UltimateLogic()
+    end
+
+    local target = _G.SDK.TargetSelector:GetTarget(800, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    if target then
+        if isSpellReady(_Q) then
+            castSpell(self.QspellData, HK_Q, target)
+        end
+
+        if isSpellReady(_W) and self.isMega then
+            castSpell(self.WspellData, HK_W, target)
+        end
+        if isSpellReady(_E) and (self.transformingSoon or not self.Menu.Combo.ETransform:Value()) then
+            Control.CastSpell(HK_E, target)
+        end
+
+    end
+end
+
+function Gnar:Harass()
+    local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    if target then
+        
+        if isSpellReady(_Q) then
+            castSpell(self.QspellData, HK_Q, target)
+        end
+
+    end
+   
+end
+
 
 ----------------------------------------------------
 -- Script starts here
