@@ -1,5 +1,5 @@
 
-local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar"}
+local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri"}
 
 if not table.contains(Heroes, myHero.charName) then return end
 
@@ -1192,6 +1192,113 @@ function Gnar:Harass()
    
 end
 
+
+--------------------------------------------------
+-- Gnar
+--------------
+class "Zeri"
+        
+function Zeri:__init()	     
+    print("devX-Zeri Loaded") 
+    self:LoadMenu()   
+    
+    Callback.Add("Tick", function() self:onTickEvent() end)    
+
+    orbwalker:OnPostAttack(function(...) self:onPostAttack(...) end )
+end
+
+--
+-- Menu 
+function Zeri:LoadMenu() --MainMenu
+    self.Menu = MenuElement({type = MENU, id = "devZeri", name = "DevX Zeri v1.0"})
+    -- ComboMenu  
+
+    self.Menu:MenuElement({type = MENU, id = "Combo", name = "Combo"})
+    
+end
+
+
+
+--------------------------------------------------
+-- Callbacks
+------------
+
+function Zeri:onPostAttack()
+    
+    local target = orbwalker:GetTarget()
+    
+    if target then
+        if myHero.pos:DistanceTo(target.pos) < 800 and isSpellReady(_Q) then
+            Control.CastSpell(HK_Q, target)
+        end
+    end
+
+end
+function Zeri:onTickEvent()
+    
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+        self:Combo()
+    end
+
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_HARASS] then
+        self:Harass()
+    end
+
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] then
+        self:LaneClear()
+    end
+end
+----------------------------------------------------
+-- Other Functions
+---------------------
+
+
+----------------------------------------------------
+-- Combat Modes
+---------------------
+
+function Zeri:Combo()
+    local target = orbwalker:GetTarget()
+    if not target then
+        target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    end
+    if target then
+        
+        if myHero.pos:DistanceTo(target.pos) < 800 and isSpellReady(_Q) then
+            Control.CastSpell(HK_Q, target)
+        end
+
+    end
+end
+
+function Zeri:LaneClear()
+    local target = HealthPrediction:GetLaneClearTarget()
+    if not target then
+        target = HealthPrediction:GetJungleTarget()
+    end
+    
+    if target then
+        
+        if myHero.pos:DistanceTo(target.pos) < 800 and isSpellReady(_Q) then
+            Control.CastSpell(HK_Q, target)
+        end
+
+    end
+end
+function Zeri:Harass()
+    local target = orbwalker:GetTarget()
+    if not target then
+        target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    end
+    if target then
+        
+        if myHero.pos:DistanceTo(target.pos) < 800 and isSpellReady(_Q) then
+            Control.CastSpell(HK_Q, target)
+        end
+
+    end
+   
+end
 
 ----------------------------------------------------
 -- Script starts here
