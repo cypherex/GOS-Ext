@@ -1078,7 +1078,7 @@ function Gnar:LoadMenu() --MainMenu
     -- ComboMenu  
 
     self.Menu:MenuElement({type = MENU, id = "Combo", name = "Combo"})
-    self.Menu.Combo:MenuElement({name = "[E] if transforming soon", id = "ETransform", value = true, toggle = true})
+    self.Menu.Combo:MenuElement({name = "[E] Logic", id = "ETransform", value = 1, drop = {"None", "Always", "When about to transform", "Gapcloser"}})
     self.Menu.Combo:MenuElement({id = "UltHP", name = "Ult if HP < x %", value = 30, min = 0, max = 110, step = 1})
     self.Menu.Combo:MenuElement({id = "UltHeroes", name = "Ult if x enemies within wall range", value = 2, min = 0, max = 5, step = 1})
     self.Menu.Combo:MenuElement({id = "UltAuto", name = "Auto-Ult outside of combo", value = false, toggle = true})
@@ -1105,6 +1105,7 @@ function Gnar:onTickEvent()
     end
 
 end
+
 ----------------------------------------------------
 -- Combat Functions
 ---------------------
@@ -1126,6 +1127,7 @@ function Gnar:UltimateLogic()
         end
     end
 end
+
 
 ----------------------------------------------------
 -- Other Functions
@@ -1154,7 +1156,7 @@ function Gnar:Combo()
     if isSpellReady(_R) then
         self:UltimateLogic()
     end
-
+    --{"None", "Always", "When about to transform", "Gapcloser"}
     local target = _G.SDK.TargetSelector:GetTarget(800, _G.SDK.DAMAGE_TYPE_MAGICAL);
     if target then
         if isSpellReady(_Q) then
@@ -1164,8 +1166,15 @@ function Gnar:Combo()
         if isSpellReady(_W) and self.isMega then
             castSpell(self.WspellData, HK_W, target)
         end
-        if isSpellReady(_E) and (self.transformingSoon or not self.Menu.Combo.ETransform:Value()) then
-            Control.CastSpell(HK_E, target)
+        if isSpellReady(_E)  then
+            local transformCondition = self.Menu.Combo.ETransform:Value()
+            if transformCondition == 2 then
+                Control.CastSpell(HK_E, target)
+            elseif transformCondition == 3 and self.transformingSoon  then
+                Control.CastSpell(HK_E, target)
+            elseif transformCondition == 4 and myHero.pos:DistanceTo(target.pos) > 350 then 
+                Control.CastSpell(HK_E, target)
+            end
         end
 
     end
