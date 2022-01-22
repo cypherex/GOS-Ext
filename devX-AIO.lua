@@ -200,6 +200,30 @@ local function ClosestPointOnLineSegment(p, p1, p2)
     return {x = ax + t * bxax, z = az + t * bzaz}, true
 end
 
+local _nextVectorCast = Game.Timer()
+local _nextSpellCast = Game.Timer()
+local _vectorMousePos = mousePos
+function VectorCast(startPos, endPos, hotkey)
+	if _nextSpellCast > Game.Timer() then return end	
+	if _nextVectorCast > Game.Timer() then return end
+
+	_nextVectorCast = Game.Timer() + 2
+	_nextSpellCast = Game.Timer() + .25
+    _vectorMousePos = mousePos
+
+	Control.SetCursorPos(startPos)	
+    orbwalker:SetMovement(false)
+    orbwalker:SetAttack(false)
+    
+	DelayAction(function()Control.KeyDown(hotkey) end,.05)
+	DelayAction(function()Control.SetCursorPos(endPos) end,.1)
+	DelayAction(function()
+        Control.KeyUp(hotkey) 
+        orbwalker:SetMovement(true)
+        orbwalker:SetAttack(true)
+    end,.15) 
+	DelayAction(function()Control.SetCursorPos(_vectorMousePos) end,.15)
+end
 --------------------------------------------------
 -- Swain
 --------------
@@ -1078,7 +1102,9 @@ function Gnar:LoadMenu() --MainMenu
     -- ComboMenu  
 
     self.Menu:MenuElement({type = MENU, id = "Combo", name = "Combo"})
-    self.Menu.Combo:MenuElement({name = "[E] Logic", id = "ETransform", value = 1, drop = {"None", "Always", "When about to transform", "Gapcloser"}})
+    self.Menu.Combo:MenuElement({name = "[E] Logic - Mini", id = "ETransform", value = 1, drop = {"None", "Always", "When about to transform", "Gapcloser"}})
+    self.Menu.Combo:MenuElement({name = "[E] Logic - Mega", id = "ETransformMega", value = 1, drop = {"None", "Always", "When about to transform", "Gapcloser"}})
+    
     self.Menu.Combo:MenuElement({id = "UltHP", name = "Ult if HP < x %", value = 30, min = 0, max = 110, step = 1})
     self.Menu.Combo:MenuElement({id = "UltHeroes", name = "Ult if x enemies within wall range", value = 2, min = 0, max = 5, step = 1})
     self.Menu.Combo:MenuElement({id = "UltAuto", name = "Auto-Ult outside of combo", value = false, toggle = true})
@@ -1111,17 +1137,21 @@ end
 ---------------------
 
 function Gnar:UltimateLogic()
+	if _nextSpellCast > Game.Timer() then return end	
     local wallLocation = FindClosestWall()
 
     if wallLocation and myHero.pos:DistanceTo(wallLocation) < 400 then
         local enemiesInRange = getEnemyHeroesWithinDistanceOfUnit(wallLocation, 550)
+        print(#enemiesInRange)
 
-        if #enemiesInRange > self.Menu.Combo.UltHeroes:Value() then
-            Control.CastSpell(HK_R, wallPosition)
+        if #enemiesInRange >= self.Menu.Combo.UltHeroes:Value() then
+            local firstEnemy = enemiesInRange[1]
+            VectorCast(wallLocation, firstEnemy.pos, HK_R)
+            
         elseif #enemiesInRange > 0 then
             for i, hero in pairs(enemiesInRange) do
-                if hero.health < self.Menu.Combo.UltHP:Value() then
-                    Control.CastSpell(HK_R, wallPosition)
+                if hero.health <= self.Menu.Combo.UltHP:Value() then
+                    VectorCast(wallLocation, hero.pos, HK_R)
                 end
             end
         end
@@ -1156,6 +1186,7 @@ function Gnar:Combo()
     if isSpellReady(_R) then
         self:UltimateLogic()
     end
+	if _nextSpellCast > Game.Timer() then return end	
     --{"None", "Always", "When about to transform", "Gapcloser"}
     local target = _G.SDK.TargetSelector:GetTarget(800, _G.SDK.DAMAGE_TYPE_MAGICAL);
     if target then
@@ -1168,6 +1199,9 @@ function Gnar:Combo()
         end
         if isSpellReady(_E)  then
             local transformCondition = self.Menu.Combo.ETransform:Value()
+            if self.isMega then
+                transformCondition = self.Menu.Combo.ETransformMega:Value()
+            end
             if transformCondition == 2 then
                 Control.CastSpell(HK_E, target)
             elseif transformCondition == 3 and self.transformingSoon  then
