@@ -76,6 +76,27 @@ local function getEnemyHeroesWithinDistanceOfUnit(location, distance)
     end
     return EnemyHeroes
 end
+
+
+local function ClosestPointOnLineSegment(p, p1, p2)
+    local px = p.x
+    local pz = p.z
+    local ax = p1.x
+    local az = p1.z
+    local bx = p2.x
+    local bz = p2.z
+    local bxax = bx - ax
+    local bzaz = bz - az
+    local t = ((px - ax) * bxax + (pz - az) * bzaz) / (bxax * bxax + bzaz * bzaz)
+    if (t < 0) then
+        return p1, false
+    end
+    if (t > 1) then
+        return p2, false
+    end
+    return {x = ax + t * bxax, z = az + t * bzaz}, true
+end
+
 local function getEnemyHeroesWithinDistance(distance)
     return getEnemyHeroesWithinDistanceOfUnit(myHero.pos, distance)
 end
@@ -425,7 +446,7 @@ class "RekSai"
                 return
             end
             
-            if isSpellReady(_E) and target and self.Menu.Combo.UseE:Value() then
+            if isSpellReady(_E) and target and self.Menu.Combo.UseE:Value() and not (myHero.mana > 80 and myHero.mana < 90) then
                 local distance = getDistance(myHero.pos, target.pos)
                 if distance < 350 then
                     Control.CastSpell(HK_E, target)
@@ -486,7 +507,7 @@ class "RekSai"
                 return
             end
              
-            if isSpellReady(_E) and target and self.Menu.Combo.UseE:Value() then
+            if isSpellReady(_E) and target and self.Menu.Combo.UseE:Value() and not (myHero.mana > 80 and myHero.mana < 90) then
                 local distance = getDistance(myHero.pos, target.pos)
                 if distance < 350 then
                     Control.CastSpell(HK_E, target)
@@ -804,7 +825,8 @@ class "Syndra"
     end
 
     function Syndra:castEQ(target, distance)
-        local castPosition = myHero.pos + (target.pos - myHero.pos):Normalized() * math.min(distance*3/4, 750)
+        local castPosition = myHero.pos + (target.pos - myHero.pos):Normalized() * math.min(distance*9/10, 750)
+
         Control.CastSpell(HK_Q, castPosition) 
         orbwalker:SetMovement(false)
         self.isInEQ = true
@@ -812,7 +834,7 @@ class "Syndra"
             Control.CastSpell(HK_E, target.pos)
             self.isInEQ = false
             orbwalker:SetMovement(true)
-        end,0.12)	
+        end,0.22)	
     end
 
     function Syndra:castW(wObject, target)
@@ -853,6 +875,21 @@ class "Syndra"
         return nil
     end
 
+    function Syndra:getEObject(targetPosition)
+        for i = 1, GameObjectCount() do
+            local gameObj = GameObject(i)
+            if gameObj and gameObj.name == "Seed" and not gameObj.dead then
+                local spellLine = ClosestPointOnLineSegment(gameObj.pos, myHero.pos, targetPosition)
+                local distance = myHero.pos:DistanceTo(gameObj.pos)
+                
+                if distance < 700 and gameObj.pos:DistanceTo(spellLine) < 85 then
+                    return gameObj
+                end
+            end
+        end 
+
+        return nil
+    end
     function Syndra:getRDamage(target)
         return getdmg("R", target, myHero, 2) * myHero:GetSpellData(_R).ammo
     end
@@ -917,7 +954,7 @@ class "Syndra"
     end
 
     function Syndra:Combo()
-        local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+        local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
         
         if self.isInEQ or self.isInW then return end
         if target then
@@ -940,20 +977,35 @@ class "Syndra"
             end
 
             if isSpellReady(_E) then
-                if distance < 650 then
-                    self:castQE(target)
-                elseif distance < 1200 then
-                    self:castEQ(target, distance)
+                
+                local ePos = self:getEObject(target.pos)
+                if ePos then
+                    Control.CastSpell(HK_E, ePos)
+                    orbwalker:SetMovement(false)
+                    self.isInEQ = true
+                    DelayAction(function ()
+                        orbwalker:SetMovement(true)
+                        self.isInEQ = false
+                    end, 0.2)
+
                 end
+                --elseif distance < 650 then
+                --    self:castQE(target)
+                --elseif distance < 1200 then
+                --    self:castEQ(target, distance)
+                --end
             end
             
             if self.isInEQ then return end
 
-            if distance < 850 and isSpellReady(_Q) then
+            if distance < 820 and isSpellReady(_Q) then
                 castSpell(self.qSpellData, HK_Q, target)
+            elseif distance > 820 and isSpellReady(_Q) then
+                local qpos = myHero.pos + (target.pos - myHero.pos):Normalized() * 780
+                Control.CastSpell(HK_Q, qpos)
             end
 
-            if isSpellReady(_W) and distance < 850 then
+            if isSpellReady(_W) and distance < 850 and not isSpellReady(_E) then
                 local wObject = self:getWObject()
                 if wObject then
                     self:castW(wObject, target)
@@ -988,7 +1040,7 @@ class "Syndra"
         
         if self.isInEQ or self.isInW then return end
 
-        local target = _G.SDK.TargetSelector:GetTarget(850, _G.SDK.DAMAGE_TYPE_MAGICAL);
+        local target = _G.SDK.TargetSelector:GetTarget(870, _G.SDK.DAMAGE_TYPE_MAGICAL);
         
         if target and target.activeSpell and target.activeSpell.valid and myHero.pos:DistanceTo(target.pos) < 805 then
             castSpell(self.qSpellData, HK_Q, target)
@@ -1009,7 +1061,7 @@ class "Syndra"
 
         for i, enemy in pairs(getEnemyHeroes()) do
             if enemy and not enemy.dead and enemy.valid and enemy.visible and myHero.pos:DistanceTo(enemy.pos) < self.Menu.AntiMelee:Value() + myHero.boundingRadius then
-                print("Anti-Melee")
+                
                 self:castQE(enemy)
             end
         end
@@ -1034,7 +1086,15 @@ function Gangplank:LoadMenu() --MainMenu
     self.Menu = MenuElement({type = MENU, id = "devGangplank", name = "DevX Gangplank v1.0"})
     -- ComboMenu  
 
-    self.Menu:MenuElement({type = MENU, id = "Empty", name = "Empty"})
+    self.Menu:MenuElement({type = MENU, id = "Combo", name = "Combo"})
+    self.Menu.Combo:MenuElement({id = "FirstBarrel", name = "Place first barrel", value = true, toggle = true})
+    self.Menu.Combo:MenuElement({id = "NextBarrel", name = "Place additional barrels", value = true, toggle = true})
+    self.Menu.Combo:MenuElement({id = "PhantomBarrel", name = "Phantom Barrel", value = true, toggle = true})
+
+    
+    self.Menu:MenuElement({id = "LastHit", name = "Last Hit Minions", value = true, toggle = true})
+    self.Menu:MenuElement({id = "AutoUlt", name = "Ult killable", value = true, toggle = true})
+    self.Menu:MenuElement({id = "AutoCleanse", name = "Auto W", value = true, toggle = true})
 end
 
 function Gangplank:Draw()
@@ -1046,7 +1106,21 @@ end
 -- Callbacks
 ------------
 function Gangplank:onTickEvent()
-
+    if self.Menu.AutoCleanse:Value() and isSpellReady(_W) and isTargetImmobile(myHero)  then
+        Control.CastSpell(HK_W, myHero)
+    end
+    if self.Menu.AutoUlt:Value() and isSpellReady(_R) then
+        self:AutoUlt()
+    end
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+        self:Combo()
+    end
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_HARASS] then
+        self:Harass()
+    end
+    if self.Menu.LastHit:Value() and _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LASTHIT] then
+        self:LastHit()
+    end
 end
 ----------------------------------------------------
 -- Combat Functions
@@ -1056,28 +1130,144 @@ end
 -- Other Functions
 ---------------------
 
+function Gangplank:getBarrels()
+    local barrelList = {}
 
+    for i = 1, GameObjectCount() do
+        local obj = GameObject(i)
+        if obj.charName == 'GangplankBarrel' then
+            table.insert(barrelList, obj)
+        end
+    end
+    return barrelList
+end
 
+function Gangplank:getFirstBarrel(target, barrels)
+    local furthestDistance = 0
+    local furthestBarrel = nil
+    local closestDistance = math.huge
+    local closestBarrel = nil
+
+    for i, barrel in pairs(barrels) do 
+        local distance = barrel.pos:DistanceTo(target.pos)
+        if distance > furthestDistance then
+            furthestDistance = distance
+            furthestBarrel = barrel
+        end
+
+        if distance < closestDistance then
+            closestDistance = distance
+            closestBarrel = barrel
+        end
+    end
+    return furthestBarrel, closestBarrel
+end
 ----------------------------------------------------
 -- Combat Modes
 ---------------------
 
 function Gangplank:AutoUlt()
+    local enemies = getEnemyHeroes()
+    for i, enemy in pairs(enemies) do
+    
+        if enemy and isValid(enemy) and not enemy.dead then
+            local dmg = getdmg("R", enemy)
+            if dmg * 3 > enemy.health then
+                local enemyPos = enemy.pos:ToMM()
+                Control.CastSpell(HK_R, enemyPos.x, enemyPos.y)
+            end
+        end
+    end
 end
 
+function Gangplank:delayAndDisableOrbwalker(delay) 
+    _nextSpellCast = Game.Timer() + delay
+    orbwalker:SetMovement(false)
+    orbwalker:SetAttack(false)
+    DelayAction(function() 
+        orbwalker:SetMovement(true)
+        orbwalker:SetAttack(true)
+    end, delay-0.1)
+end
 function Gangplank:Combo()
-    local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
-  
+	if _nextSpellCast > Game.Timer() then return end	
+
+    local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    if target == nil then return end
+
+    local barrels = self:getBarrels();
+    
+    if self.Menu.Combo.FirstBarrel:Value() and #barrels == 0 and isSpellReady(_E) then
+        Control.CastSpell(HK_E, myHero.pos)
+        --self:delayAndDisableOrbwalker(0.2)
+        return
+    end
+
+    if #barrels > 0 then
+        local firstBarrel, closestBarrel = self:getFirstBarrel(target, barrels)
+
+        if target.pos:DistanceTo(closestBarrel.pos) < 340 and firstBarrel.health == 1 then
+            if myHero.pos:DistanceTo(firstBarrel.pos) < myHero.boundingRadius + 20 then
+                Control.Attack(firstBarrel)
+                self:delayAndDisableOrbwalker(0.2)
+                return
+            elseif myHero.pos:DistanceTo(firstBarrel.pos) < 625 and isSpellReady(_Q) then
+                Control.CastSpell(HK_Q, firstBarrel)
+                self:delayAndDisableOrbwalker(0.2)
+                return
+            end
+        end
+        if isSpellReady(_E) then
+            local nextPosition = closestBarrel.pos + (target.pos - closestBarrel.pos):Normalized() * 570
+            if self.Menu.Combo.NextBarrel:Value() and #barrels == 1 and nextPosition:DistanceTo(myHero.pos) < 1000 then     
+                Control.CastSpell(HK_E, nextPosition)
+                return
+            end
+            
+            if  self.Menu.Combo.PhantomBarrel:Value() and #barrels > 1 and nextPosition:DistanceTo(myHero.pos) < 1000 and nextPosition:DistanceTo(target.pos) < 340 then
+                
+                local attacked = false
+                if myHero.pos:DistanceTo(firstBarrel.pos) < myHero.boundingRadius + 20 then
+                    Control.Attack(firstBarrel)
+                    attacked = true
+                elseif myHero.pos:DistanceTo(firstBarrel.pos) < 625 and isSpellReady(_Q) then
+                    Control.CastSpell(HK_Q, firstBarrel)
+                    attacked = true
+                end
+                if attacked then
+                    DelayAction(function () Control.CastSpell(HK_E, nextPosition) end,0.2)
+                    self:delayAndDisableOrbwalker(0.3)
+                    return
+                end
+            end
+        end
+    end
+
+    if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < 625 then
+        Control.CastSpell(HK_Q, target)
+        --self:delayAndDisableOrbwalker(0.15)
+    end
 end
 
 function Gangplank:Harass()
-    local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
-    
+    local target = _G.SDK.TargetSelector:GetTarget(700, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    if target == nil then return end
+    if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) <= 630 then
+        Control.CastSpell(HK_Q, target)
+    end
    
 end
 
-function Gangplank:LaneClear()
-    
+function Gangplank:LastHit()
+    if not isSpellReady(_Q) then return end
+
+    for i = 1, GameMinionCount() do 
+        local minion = GameMinion(i)
+        local qDmg = getdmg("Q", minion)
+        if minion and isValid(minion) and minion.isEnemy and minion.pos:DistanceTo(myHero.pos) < 630 and minion.health <= qDmg and minion.pos:DistanceTo(myHero.pos) > 350 then
+            Control.CastSpell(HK_Q, minion)
+        end
+    end
 end
 
 
@@ -1206,7 +1396,7 @@ function Gnar:Combo()
                 Control.CastSpell(HK_E, target)
             elseif transformCondition == 3 and self.transformingSoon  then
                 Control.CastSpell(HK_E, target)
-            elseif transformCondition == 4 and myHero.pos:DistanceTo(target.pos) > 350 then 
+            elseif transformCondition == 4 and myHero.pos:DistanceTo(target.pos) > 400 then 
                 Control.CastSpell(HK_E, target)
             end
         end
@@ -1269,7 +1459,12 @@ function Zeri:onPostAttack()
 
 end
 function Zeri:onTickEvent()
-    
+    local hasPassive = doesMyChampionHaveBuff("zeripassiveready")
+    if hasPassive then
+        orbwalker:SetAttack(true)
+    else
+        orbwalker:SetAttack(false)
+    end
     if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
         self:Combo()
     end
@@ -1280,6 +1475,9 @@ function Zeri:onTickEvent()
 
     if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] then
         self:LaneClear()
+    end
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LASTHIT] then
+        self:LastHit()
     end
 end
 ----------------------------------------------------
@@ -1319,6 +1517,15 @@ function Zeri:LaneClear()
 
     end
 end
+
+function Zeri:LastHit()
+    local target = HealthPrediction:GetLastHitTarget()
+    
+    if target then
+        Control.CastSpell(HK_Q, target)
+    end
+end
+
 function Zeri:Harass()
     local target = orbwalker:GetTarget()
     if not target then
