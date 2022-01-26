@@ -1087,8 +1087,11 @@ function Gangplank:LoadMenu() --MainMenu
     -- ComboMenu  
 
     self.Menu:MenuElement({type = MENU, id = "Combo", name = "Combo"})
+    self.Menu.Combo:MenuElement({id = "BlockQMax", name = "Block Q - E cooldown less than x", value = 0.6, min = 0, max = 2, step = 0.01})
+    self.Menu.Combo:MenuElement({id = "BlockQMin", name = "Block Q - E cooldown more than x", value = 0.25, min = 0, max = 2, step = 0.01})
     self.Menu.Combo:MenuElement({id = "FirstBarrel", name = "Place first barrel", value = true, toggle = true})
     self.Menu.Combo:MenuElement({id = "NextBarrel", name = "Place additional barrels", value = true, toggle = true})
+    self.Menu.Combo:MenuElement({id = "BlockHanging", name = "Do not place hanging barrels", value = true, toggle = true})
     self.Menu.Combo:MenuElement({id = "PhantomBarrel", name = "Phantom Barrel", value = true, toggle = true})
 
     
@@ -1135,7 +1138,7 @@ function Gangplank:getBarrels()
 
     for i = 1, GameObjectCount() do
         local obj = GameObject(i)
-        if obj.charName == 'GangplankBarrel' then
+        if obj.charName == 'GangplankBarrel' and not obj.dead and isValid(obj) then
             table.insert(barrelList, obj)
         end
     end
@@ -1187,7 +1190,7 @@ function Gangplank:delayAndDisableOrbwalker(delay)
     DelayAction(function() 
         orbwalker:SetMovement(true)
         orbwalker:SetAttack(true)
-    end, delay-0.1)
+    end, delay)
 end
 function Gangplank:Combo()
 	if _nextSpellCast > Game.Timer() then return end	
@@ -1205,23 +1208,40 @@ function Gangplank:Combo()
 
     if #barrels > 0 then
         local firstBarrel, closestBarrel = self:getFirstBarrel(target, barrels)
-
         if target.pos:DistanceTo(closestBarrel.pos) < 340 and firstBarrel.health == 1 then
             if myHero.pos:DistanceTo(firstBarrel.pos) < myHero.boundingRadius + 20 then
                 Control.Attack(firstBarrel)
                 self:delayAndDisableOrbwalker(0.2)
                 return
-            elseif myHero.pos:DistanceTo(firstBarrel.pos) < 625 and isSpellReady(_Q) then
+            elseif myHero.pos:DistanceTo(firstBarrel.pos) < 660 and isSpellReady(_Q) then
                 Control.CastSpell(HK_Q, firstBarrel)
                 self:delayAndDisableOrbwalker(0.2)
+                return
+            elseif myHero.pos:DistanceTo(firstBarrel.pos) < 350 then
+                Control.Move(firstBarrel.pos)
+                Control.Attack(firstBarrel)
+                self:delayAndDisableOrbwalker(1)
                 return
             end
         end
         if isSpellReady(_E) then
             local nextPosition = closestBarrel.pos + (target.pos - closestBarrel.pos):Normalized() * 570
             if self.Menu.Combo.NextBarrel:Value() and #barrels == 1 and nextPosition:DistanceTo(myHero.pos) < 1000 then     
-                Control.CastSpell(HK_E, nextPosition)
-                return
+                local distToNextPosition = target.pos:DistanceTo(nextPosition)
+                local placeBarrel = true
+                 
+                if self.Menu.Combo.BlockHanging:Value() and myHero:GetSpellData(_E).ammo == 1 then
+                    if distToNextPosition > 500 and distToNextPosition < 850 then
+                        print("Block hanging")
+                        placeBarrel = false
+                    end
+                    
+                end
+                if placeBarrel then
+                    Control.CastSpell(HK_E, nextPosition)
+                    self:delayAndDisableOrbwalker(0.1)
+                    return
+                end
             end
             
             if  self.Menu.Combo.PhantomBarrel:Value() and #barrels > 1 and nextPosition:DistanceTo(myHero.pos) < 1000 and nextPosition:DistanceTo(target.pos) < 340 then
@@ -1242,10 +1262,13 @@ function Gangplank:Combo()
             end
         end
     end
-
+    
     if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < 625 then
-        Control.CastSpell(HK_Q, target)
-        --self:delayAndDisableOrbwalker(0.15)
+        
+        local eCd = myHero:GetSpellData(_E).cd
+        if eCd < self.Menu.Combo.BlockQMin:Value() or eCd >  self.Menu.Combo.BlockQMax:Value() then
+            Control.CastSpell(HK_Q, target)
+        end
     end
 end
 
