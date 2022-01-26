@@ -1427,7 +1427,27 @@ function Zeri:__init()
     self:LoadMenu()   
     
     Callback.Add("Tick", function() self:onTickEvent() end)    
+    self.qRange = 825
 
+    
+    _G.SDK.Spell:SpellClear(_Q, 
+                            {Range=785, Speed = 2600, Delay = 0.1, Radius = 80 },
+                            function ()
+                                return isSpellReady(_Q)
+                            end,
+                            function ()
+                                return _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LASTHIT] and isSpellReady(_Q)
+                            end,
+                            function ()
+                                return _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] and isSpellReady(_Q)
+                            end,
+                            function () 
+                                local levelDmg  = {10 , 15 , 20 , 25 , 30}
+                                levelDmg = levelDmg[myHero:GetSpellData(_Q).level]
+                                local dmg = levelDmg + myHero.totalDamage*1.1 
+                                return dmg
+                            end
+    )
     orbwalker:OnPostAttack(function(...) self:onPostAttack(...) end )
 end
 
@@ -1452,7 +1472,7 @@ function Zeri:onPostAttack()
     local target = orbwalker:GetTarget()
     
     if target then
-        if myHero.pos:DistanceTo(target.pos) < 800 and isSpellReady(_Q) then
+        if myHero.pos:DistanceTo(target.pos) < self.qRange and isSpellReady(_Q) then
             Control.CastSpell(HK_Q, target)
         end
     end
@@ -1465,6 +1485,13 @@ function Zeri:onTickEvent()
     else
         orbwalker:SetAttack(false)
     end
+    
+    local hasLethal = doesMyChampionHaveBuff("ASSETS/Perks/Styles/Precision/LethalTempo/LethalTempo.lua")
+    if hasLethal then
+        self.qRange = 900
+    else
+        self.qRange = 825
+    end
     if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
         self:Combo()
     end
@@ -1473,12 +1500,12 @@ function Zeri:onTickEvent()
         self:Harass()
     end
 
-    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] then
+--[[     if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] then
         self:LaneClear()
     end
     if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LASTHIT] then
         self:LastHit()
-    end
+    end ]]
 end
 ----------------------------------------------------
 -- Other Functions
@@ -1496,7 +1523,7 @@ function Zeri:Combo()
     end
     if target then
         
-        if myHero.pos:DistanceTo(target.pos) < 800 and isSpellReady(_Q) then
+        if myHero.pos:DistanceTo(target.pos) < self.qRange and isSpellReady(_Q) then
             Control.CastSpell(HK_Q, target)
         end
 
@@ -1511,7 +1538,7 @@ function Zeri:LaneClear()
     
     if target then
         
-        if myHero.pos:DistanceTo(target.pos) < 800 and isSpellReady(_Q) then
+        if myHero.pos:DistanceTo(target.pos) <  self.qRange  and isSpellReady(_Q) then
             Control.CastSpell(HK_Q, target)
         end
 
@@ -1533,7 +1560,7 @@ function Zeri:Harass()
     end
     if target then
         
-        if myHero.pos:DistanceTo(target.pos) < 800 and isSpellReady(_Q) then
+        if myHero.pos:DistanceTo(target.pos) < self.qRange and isSpellReady(_Q) then
             Control.CastSpell(HK_Q, target)
         end
 
