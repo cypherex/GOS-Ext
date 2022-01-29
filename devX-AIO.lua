@@ -1211,11 +1211,11 @@ function Gangplank:Combo()
         if target.pos:DistanceTo(closestBarrel.pos) < 340 and firstBarrel.health == 1 then
             if myHero.pos:DistanceTo(firstBarrel.pos) < myHero.boundingRadius + 20 then
                 Control.Attack(firstBarrel)
-                self:delayAndDisableOrbwalker(0.2)
+                self:delayAndDisableOrbwalker(0.35)
                 return
             elseif myHero.pos:DistanceTo(firstBarrel.pos) < 660 and isSpellReady(_Q) then
                 Control.CastSpell(HK_Q, firstBarrel)
-                self:delayAndDisableOrbwalker(0.2)
+                self:delayAndDisableOrbwalker(0.35)
                 return
             elseif myHero.pos:DistanceTo(firstBarrel.pos) < 350 then
                 Control.Move(firstBarrel.pos)
