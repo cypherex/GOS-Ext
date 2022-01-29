@@ -882,7 +882,7 @@ class "Syndra"
                 local spellLine = ClosestPointOnLineSegment(gameObj.pos, myHero.pos, targetPosition)
                 local distance = myHero.pos:DistanceTo(gameObj.pos)
                 
-                if distance < 700 and gameObj.pos:DistanceTo(spellLine) < 85 then
+                if distance < 700 and gameObj.pos:DistanceTo(spellLine) < 70 then
                     return gameObj
                 end
             end
@@ -1441,7 +1441,7 @@ end
 
 
 --------------------------------------------------
--- Gnar
+-- Zeri
 --------------
 class "Zeri"
         
@@ -1480,7 +1480,7 @@ function Zeri:LoadMenu() --MainMenu
     self.Menu = MenuElement({type = MENU, id = "devZeri", name = "DevX Zeri v1.0"})
     -- ComboMenu  
 
-    self.Menu:MenuElement({type = MENU, id = "Combo", name = "Combo"})
+    self.Menu:MenuElement({id = "WTerrain", name = "W only through Walls", value = true})
     
 end
 
@@ -1502,19 +1502,22 @@ function Zeri:onPostAttack()
 
 end
 function Zeri:onTickEvent()
-    local hasPassive = doesMyChampionHaveBuff("zeripassiveready")
-    if hasPassive then
+    self.hasPassive = doesMyChampionHaveBuff("zeriqpassiveready")
+    if self.hasPassive then
         orbwalker:SetAttack(true)
     else
         orbwalker:SetAttack(false)
     end
-    
+
     local hasLethal = doesMyChampionHaveBuff("ASSETS/Perks/Styles/Precision/LethalTempo/LethalTempo.lua")
     if hasLethal then
         self.qRange = 900
+        self.aaRange = 575
     else
         self.qRange = 825
+        self.aaRange = 500
     end
+
     if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
         self:Combo()
     end
@@ -1523,56 +1526,61 @@ function Zeri:onTickEvent()
         self:Harass()
     end
 
---[[     if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] then
-        self:LaneClear()
-    end
-    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LASTHIT] then
-        self:LastHit()
-    end ]]
 end
 ----------------------------------------------------
 -- Other Functions
 ---------------------
 
+function Zeri:assessWOptions(target)
+    local distanceTarget = myHero.pos:DistanceTo(target.pos)
+    --if distance >= 1550 then return end
 
+    local direction = (target.pos - myHero.pos):Normalized()
+    for distance = 50, 1100, 50 do
+        local testPosition = myHero.pos + direction * distance
+
+        for i = 1, GameMinionCount() do -- blocked by minion
+            local minion = GameMinion(i)
+            if minion and minion.isEnemy and isValid(minion) and minion.pos:DistanceTo(testPosition) < 50 then
+                return false
+            end 
+        end
+        if target.pos:DistanceTo(testPosition) < 50 then -- it will hit champion before it hits wall
+            if not self.Menu.WTerrain:Value() then -- The user selected to allow hitting even when not through terrain
+                Control.CastSpell(HK_W, testPosition)
+                return true
+            else
+                return false
+            end
+        end
+        if MapPosition:inWall(testPosition) then
+            Control.CastSpell(HK_W, testPosition)
+            return true
+        end
+    end
+    return false
+end
 ----------------------------------------------------
 -- Combat Modes
 ---------------------
 
 function Zeri:Combo()
     local target = orbwalker:GetTarget()
+
     if not target then
-        target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+        target = _G.SDK.TargetSelector:GetTarget(2700, _G.SDK.DAMAGE_TYPE_MAGICAL);
     end
     if target then
+        local distance = myHero.pos:DistanceTo(target.pos) 
+        if self.hasPassive and distance <= self.aaRange then return end --lets use charged auto instead
         
-        if myHero.pos:DistanceTo(target.pos) < self.qRange and isSpellReady(_Q) then
+        if isSpellReady(_W) then
+            self:assessWOptions(target)
+        end
+        if distance < self.qRange and isSpellReady(_Q) and not orbwalker:IsAutoAttacking() then
             Control.CastSpell(HK_Q, target)
         end
 
-    end
-end
-
-function Zeri:LaneClear()
-    local target = HealthPrediction:GetLaneClearTarget()
-    if not target then
-        target = HealthPrediction:GetJungleTarget()
-    end
-    
-    if target then
-        
-        if myHero.pos:DistanceTo(target.pos) <  self.qRange  and isSpellReady(_Q) then
-            Control.CastSpell(HK_Q, target)
-        end
-
-    end
-end
-
-function Zeri:LastHit()
-    local target = HealthPrediction:GetLastHitTarget()
-    
-    if target then
-        Control.CastSpell(HK_Q, target)
     end
 end
 
@@ -1582,8 +1590,10 @@ function Zeri:Harass()
         target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
     end
     if target then
+        local distance = myHero.pos:DistanceTo(target.pos) 
+        if self.hasPassive and distance <= self.aaRange then return end --lets use charged auto instead
         
-        if myHero.pos:DistanceTo(target.pos) < self.qRange and isSpellReady(_Q) then
+        if myHero.pos:DistanceTo(target.pos) < self.qRange and isSpellReady(_Q) and not orbwalker:IsAutoAttacking()  then
             Control.CastSpell(HK_Q, target)
         end
 
