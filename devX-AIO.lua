@@ -1256,7 +1256,7 @@ function Gangplank:Combo()
                 end
                 if attacked then
                     DelayAction(function () Control.CastSpell(HK_E, nextPosition) end,0.2)
-                    self:delayAndDisableOrbwalker(0.3)
+                    self:delayAndDisableOrbwalker(0.4)
                     return
                 end
             end
@@ -1501,6 +1501,7 @@ function Zeri:onPostAttack()
     end
 
 end
+
 function Zeri:onTickEvent()
     self.hasPassive = doesMyChampionHaveBuff("zeriqpassiveready")
     if self.hasPassive then
