@@ -4,6 +4,7 @@ local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri"}
 if not table.contains(Heroes, myHero.charName) then return end
 
 require "DamageLib"
+require "MapPositionGOS"
 require "GGPrediction"
 -------------------------------------------------
 -- Variables
@@ -1480,7 +1481,9 @@ function Zeri:LoadMenu() --MainMenu
     self.Menu = MenuElement({type = MENU, id = "devZeri", name = "DevX Zeri v1.0"})
     -- ComboMenu  
 
-    self.Menu:MenuElement({id = "WTerrain", name = "W only through Walls", value = true})
+    self.Menu:MenuElement({ id = "WTerrain", 
+                            name = "W only through Walls", 
+                            value = true})
     
 end
 
@@ -1539,24 +1542,29 @@ function Zeri:assessWOptions(target)
     local direction = (target.pos - myHero.pos):Normalized()
     for distance = 50, 1100, 50 do
         local testPosition = myHero.pos + direction * distance
-
-        for i = 1, GameMinionCount() do -- blocked by minion
-            local minion = GameMinion(i)
-            if minion and minion.isEnemy and isValid(minion) and minion.pos:DistanceTo(testPosition) < 50 then
-                return false
-            end 
-        end
-        if target.pos:DistanceTo(testPosition) < 50 then -- it will hit champion before it hits wall
-            if not self.Menu.WTerrain:Value() then -- The user selected to allow hitting even when not through terrain
+        if testPosition:ToScreen().onScreen then
+            
+            for i = 1, GameMinionCount() do -- blocked by minion
+                local minion = GameMinion(i)
+                if minion and minion.isEnemy and isValid(minion) and minion.pos:DistanceTo(testPosition) < 50 then
+                    return false
+                end 
+            end
+            if target.pos:DistanceTo(testPosition) < 50 then -- it will hit champion before it hits wall
+                if not self.Menu.WTerrain:Value() then -- The user selected to allow hitting even when not through terrain
+                    Control.CastSpell(HK_W, testPosition)
+                    return true
+                else
+                    return false
+                end
+            end
+            if MapPosition:inWall(testPosition) then
+                if target.pos:DistanceTo(testPosition) > 1500 then
+                    return false
+                end
                 Control.CastSpell(HK_W, testPosition)
                 return true
-            else
-                return false
             end
-        end
-        if MapPosition:inWall(testPosition) then
-            Control.CastSpell(HK_W, testPosition)
-            return true
         end
     end
     return false
@@ -1567,7 +1575,7 @@ end
 
 function Zeri:Combo()
     local target = orbwalker:GetTarget()
-
+    print(myHero.pos)
     if not target then
         target = _G.SDK.TargetSelector:GetTarget(2700, _G.SDK.DAMAGE_TYPE_MAGICAL);
     end
