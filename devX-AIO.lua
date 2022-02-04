@@ -1,11 +1,19 @@
 
-local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri"}
+local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin"}
 
-if not table.contains(Heroes, myHero.charName) then return end
+if not table.contains(Heroes, myHero.charName) then 
+    print("DevX AIO does not support "+ myHero.charName)
+    return 
+end
 
 require "DamageLib"
 require "MapPositionGOS"
 require "GGPrediction"
+
+if not _G.SDK then
+    print("GGOrbwalker is not enabled. DevX-AIO will exit")
+    return
+end
 -------------------------------------------------
 -- Variables
 ------------
@@ -79,6 +87,32 @@ local function getEnemyHeroesWithinDistanceOfUnit(location, distance)
 end
 
 
+local function getWardSlot()
+    local WardKey = {[ITEM_1] = HK_ITEM_1, [ITEM_2] = HK_ITEM_2,[ITEM_3] = HK_ITEM_3, [ITEM_4] = HK_ITEM_4, [ITEM_5] = HK_ITEM_5, [ITEM_6] = HK_ITEM_6, [ITEM_7] = HK_ITEM_7}				
+   
+    -- 2055 pink ward, 3340 normal
+    for slot = ITEM_1, ITEM_7 do
+		if myHero:GetItemData(slot).itemID and myHero:GetItemData(slot).itemID == 3340 and myHero:GetSpellData(slot).ammo > 0  then
+			return slot, WardKey[slot]
+		end
+    end
+    for slot = ITEM_1, ITEM_7 do
+		
+		if myHero:GetItemData(slot).itemID and myHero:GetItemData(slot).itemID == 2055  then
+            return slot, WardKey[slot]
+		end
+    end
+    return nil, nil
+end
+
+local function getFlashSlot()
+    if myHero:GetSpellData(SUMMONER_1).name:find("Flash") and isSpellReady(SUMMONER_1) then
+        return SUMMONER_1, HK_SUMMONER_1
+    elseif myHero:GetSpellData(SUMMONER_2).name:find("Flash") and isSpellReady(SUMMONER_2)  then
+        return  SUMMONER_2, HK_SUMMONER_2
+    end
+    return nil, nil
+end
 local function ClosestPointOnLineSegment(p, p1, p2)
     local px = p.x
     local pz = p.z
@@ -151,10 +185,17 @@ local function castSpell(spellData, hotkey, target)
     end
 end
 
+local function castSpellHigh(spellData, hotkey, target)
+    local pred = GGPrediction:SpellPrediction(spellData)
+    pred:GetPrediction(target, myHero)
+    if pred:CanHit(GGPrediction.HITCHANCE_HIGH) then
+        Control.CastSpell(hotkey, pred.CastPosition)	
+    end
+end
 local function castSpellExtended(spellData, hotkey, target, extendAmount)
     local pred = GGPrediction:SpellPrediction(spellData)
     pred:GetPrediction(target, myHero)
-    if pred:CanHit(GGPrediction.COLLISION_NORMAL) then
+    if pred:CanHit(GGPrediction.HITCHANCE_NORMAL) then
         local castPos = Vector(pred.CastPosition):Extended(Vector(myHero.pos), extendAmount) 
         Control.CastSpell(hotkey, castPos)	
     end
@@ -1093,6 +1134,7 @@ function Gangplank:LoadMenu() --MainMenu
     self.Menu.Combo:MenuElement({id = "FirstBarrel", name = "Place first barrel", value = true, toggle = true})
     self.Menu.Combo:MenuElement({id = "NextBarrel", name = "Place additional barrels", value = true, toggle = true})
     self.Menu.Combo:MenuElement({id = "BlockHanging", name = "Do not place hanging barrels", value = true, toggle = true})
+    self.Menu.Combo:MenuElement({id = "MinBarrels", name = "Minimum barrels before placing", value = 2, min = 0, max = 3, step = 1})
     self.Menu.Combo:MenuElement({id = "PhantomBarrel", name = "Phantom Barrel", value = true, toggle = true})
 
     
@@ -1102,7 +1144,15 @@ function Gangplank:LoadMenu() --MainMenu
 end
 
 function Gangplank:Draw()
-    
+    for i, champ in pairs(getEnemyHeroes()) do
+        local percentHP = (champ.health / champ.maxHealth * 100)
+        if percentHP < 30 then
+            Draw.Text(champ.charName .. " - " .. percentHP .. " % HP", 15, 10, 70 + i*15, Draw.Color(255, 0, 255, 0))
+        else
+            Draw.Text(champ.charName .. " - " .. percentHP .. " % HP", 15, 10, 70 + i*15, Draw.Color(255, 0, 70, 255))
+
+        end
+    end
 end
 
 
@@ -1201,7 +1251,7 @@ function Gangplank:Combo()
 
     local barrels = self:getBarrels();
     
-    if self.Menu.Combo.FirstBarrel:Value() and #barrels == 0 and isSpellReady(_E) then
+    if self.Menu.Combo.FirstBarrel:Value() and #barrels == 0 and isSpellReady(_E) and myHero:GetSpellData(_E).ammo >= self.Menu.Combo.MinBarrels:Value() then
         Control.CastSpell(HK_E, myHero.pos)
         --self:delayAndDisableOrbwalker(0.2)
         return
@@ -1231,9 +1281,9 @@ function Gangplank:Combo()
                 local distToNextPosition = target.pos:DistanceTo(nextPosition)
                 local placeBarrel = true
                  
-                if self.Menu.Combo.BlockHanging:Value() and myHero:GetSpellData(_E).ammo == 1 then
+                if (self.Menu.Combo.BlockHanging:Value() and myHero:GetSpellData(_E).ammo == 1) or myHero:GetSpellData(_E).ammo < self.Menu.Combo.MinBarrels:Value() then
                     if distToNextPosition > 500 and distToNextPosition < 850 then
-                        print("Block hanging")
+                        print("Blocking barrel placement")
                         placeBarrel = false
                     end
                     
@@ -1268,7 +1318,14 @@ function Gangplank:Combo()
         
         local eCd = myHero:GetSpellData(_E).cd
         if eCd < self.Menu.Combo.BlockQMin:Value() or eCd >  self.Menu.Combo.BlockQMax:Value() then
-            Control.CastSpell(HK_Q, target)
+            if #barrels > 0 then
+                local firstBarrel, closestBarrel = self:getFirstBarrel(target, barrels)
+                if not firstBarrel.health == 1 then
+                    Control.CastSpell(HK_Q, target)
+                end
+            else
+                Control.CastSpell(HK_Q, target)
+            end
         end
     end
 end
@@ -1575,7 +1632,7 @@ end
 
 function Zeri:Combo()
     local target = orbwalker:GetTarget()
-    print(myHero.pos)
+    
     if not target then
         target = _G.SDK.TargetSelector:GetTarget(2700, _G.SDK.DAMAGE_TYPE_MAGICAL);
     end
@@ -1610,6 +1667,336 @@ function Zeri:Harass()
    
 end
 
+
+--------------------------------------------------
+-- LeeSin
+--------------
+class "LeeSin"
+        
+function LeeSin:__init()	     
+    print("devX-LeeSin Loaded") 
+    self:LoadMenu()   
+    
+    self.qPrediction = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Radius = 60, Range = 1200, Speed = 1800, Collision = true, CollisionTypes = {GGPrediction.COLLISION_MINION}}
+    
+    Callback.Add("Tick", function() self:onTickEvent() end)    
+    Callback.Add("Draw", function() self:onDrawEvent() end)
+    
+end
+
+--
+-- Menu 
+function LeeSin:LoadMenu() --MainMenu
+    self.Menu = MenuElement({type = MENU, id = "devLeeSin", name = "DevX LeeSin v1.0"})
+    -- ComboMenu  
+
+    
+end
+
+
+
+--------------------------------------------------
+-- Callbacks
+------------
+
+function LeeSin:onDrawEvent()
+    if self.insecAlly then
+        --Draw.Circle(self.insecAlly.pos, 50, 1,  Draw.Color(255,0,255,0))
+        --Draw.Circle(self.insecPosition, 50, 1,  Draw.Color(255,0,0,255))
+        --Draw.Circle(self.target.pos, 50, 1,  Draw.Color(255,255,0,0))
+    end
+    if self.tripleUltTarget then
+        Draw.Circle(self.tripleUltPos, 50, 1,  Draw.Color(255,0,0,255))
+        Draw.Circle(self.tripleUltTarget.pos, 50, 1,  Draw.Color(255,255,0,0))
+    end
+end
+
+function LeeSin:onTickEvent()
+    self.wardSlot, self.wardKey = getWardSlot()
+    self.flashSlot, self.flashKey = getFlashSlot()
+
+    local target = _G.SDK.TargetSelector:GetTarget(1800, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    self.target = target
+
+    if self.target and isSpellReady(_R) then
+        self.insecAlly, self.insecPosition = self:identifyInsecOpportunity(target)
+        self:identifyTripleUlt()
+    end
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+        self:Combo()
+    end
+
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_HARASS] then
+        self:Harass()
+    end
+
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_JUNGLECLEAR] or _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] then
+        self:Clear()
+    end
+
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_FLEE] then
+        self:Flee()
+    end
+end
+----------------------------------------------------
+-- Other Functions
+---------------------
+
+function LeeSin:identifyInsecOpportunity(target)
+    local closestAlly = nil
+    local closestDistance = math.huge
+    for i = 1, GameTurretCount() do
+        local turret = GameTurret(i)
+        local distance = turret.pos:DistanceTo(target.pos)
+        if turret and not turret.dead and turret.isAlly and distance < closestDistance then
+            closestDistance = distance
+            closestAlly = turret
+        end
+    end
+    for i = 1, GameHeroCount() do
+        local hero = GameHero(i)
+        local distance = hero.pos:DistanceTo(target.pos)
+        if hero and not hero.dead and hero.isAlly and not hero.isMe and distance < closestDistance then
+            closestDistance = distance
+            closestAlly = hero
+        end
+    end
+    if closestDistance < 2000 then
+        return closestAlly, target.pos + (target.pos - closestAlly.pos):Normalized() * 250
+    end
+    return nil, nil
+end
+
+function LeeSin:identifyTripleUlt()
+    local enemies = getEnemyHeroesWithinDistance(1200)
+    if #enemies < 3 then 
+        self.tripleUltTarget = nil;
+        self.tripleUltPos = nil;
+        return 
+    end
+    
+    self.tripleUltTarget = nil;
+    self.tripleUltPos = nil;
+
+    for i, enemy in pairs(enemies) do
+        local distance = enemy.pos:DistanceTo(myHero.pos)
+        if distance < 600 then
+            local startPos, mPos, height = Vector(myHero.pos), Vector(mousePos), myHero.pos.y
+            for i = 200, 600, 25 do -- search range
+                local endPos = startPos:Extended(mPos, i)
+                for j = 20, 360, 20 do -- angle step
+                    local testPos = Rotate(startPos, endPos, height, math.rad(j))
+                    if self:evaluateUlt(testPos, enemy, enemies) then
+                        self.tripleUltTarget = enemy;
+                        self.tripleUltPos = testPos;
+                        return
+                    end
+                end
+            end
+        end
+    end
+end
+
+function LeeSin:evaluateUlt(position, enemy, enemies)
+    if position:DistanceTo(enemy.pos) > 400 then return false end
+
+    local targetPosition = enemy.pos  + Vector( enemy.pos - position ):Normalized() * 1200
+    local count = 1
+    for i, otherEnemy in pairs(enemies) do
+        if otherEnemy.networkID ~= enemy.networkID then
+            
+            local spellLine = ClosestPointOnLineSegment(otherEnemy.pos, myHero.pos, targetPosition)
+            if otherEnemy.pos:DistanceTo(spellLine) < 100 then
+                count = count+1
+            end
+        end
+    end
+    if count >= 2 then
+        return true
+    end
+    return false
+end
+
+function LeeSin:getWardJumpTarget()
+    local closestTarget = nil
+    local closestDistance = math.huge
+
+    for i = 1, Game.WardCount() do
+        local ward = Game.Ward(i)
+        if ward and ward.valid and ward.isAlly then
+            local distance = mousePos:DistanceTo(ward.pos)
+            if distance < closestDistance then
+                closestDistance = distance
+                closestTarget = ward
+            end
+        end
+    end	
+    
+    for i = 1, GameHeroCount() do
+        local hero = GameHero(i)
+        if hero and not hero.dead and hero.isAlly and not hero.isMe then
+            local distance = mousePos:DistanceTo(hero.pos)
+            
+            if distance < closestDistance then
+                closestDistance = distance
+                closestTarget = hero
+            end
+        end
+    end
+    
+    for i = 1, GameMinionCount() do
+        local minion = GameMinion(i)
+        if minion and minion.isAlly and not minion.dead then
+            local distance = mousePos:DistanceTo(minion.pos)
+            
+            if distance < closestDistance then
+                closestDistance = distance
+                closestTarget = minion
+            end
+        end
+    end
+
+    return closestTarget, closestDistance
+end
+
+function LeeSin:delayAndDisableOrbwalker(delay) 
+    _nextSpellCast = Game.Timer() + delay
+    orbwalker:SetMovement(false)
+    orbwalker:SetAttack(false)
+    DelayAction(function() 
+        orbwalker:SetMovement(true)
+        orbwalker:SetAttack(true)
+    end, delay)
+end
+----------------------------------------------------
+-- Combat Modes
+---------------------
+
+function LeeSin:Flee()
+	if _nextSpellCast > Game.Timer() then return end	
+
+    if not isSpellReady(_W) and string.find(myHero:GetSpellData(_Q).name, 'One') then
+        return
+    end
+
+    local closestTarget, closestDistance = self:getWardJumpTarget()
+
+    if closestTarget then
+        local distance = myHero.pos:DistanceTo(closestTarget.pos)
+        if (distance  > 400 or not self.wardSlot) and distance < 700 then
+            Control.CastSpell(HK_W, closestTarget)
+            self:delayAndDisableOrbwalker(0.3)
+            return
+        end
+    end
+
+    if self.wardSlot then
+        local distance = mousePos:DistanceTo(myHero.pos)
+        local wardPosition = myHero.pos + (mousePos - myHero.pos):Normalized() * math.min(distance, 650)
+
+        Control.CastSpell(self.wardKey, wardPosition)
+        DelayAction(function () Control.CastSpell(HK_W, wardPosition) end, 0.15)
+        self:delayAndDisableOrbwalker(0.3)
+    end
+
+end
+
+function LeeSin:Combo()
+	if _nextSpellCast > Game.Timer() then return end	
+
+    if self.target then
+        local distance = myHero.pos:DistanceTo(self.target.pos) 
+
+        if self.tripleUltTarget and isSpellReady(_R) then
+            if myHero.pos.DistanceTo(self.tripleUltPos) > 200 then 
+                Control.Move(self.tripleUltPos)
+                self:delayAndDisableOrbwalker(0.2)
+                return
+            end
+            Control.CastSpell(HK_R, self.tripleUltTarget)
+        end
+        if self.insecPosition and isSpellReady(_R) and (self.flashSlot or self.wardSlot) and not self.tripleUltTarget then -- ward insec
+            local distanceFromPos = myHero.pos:DistanceTo(self.insecPosition)
+            
+            if self.wardSlot and distanceFromPos > 50 and distanceFromPos < 400 then
+                self:delayAndDisableOrbwalker(0.55)
+                Control.CastSpell(self.wardKey, self.insecPosition)
+                DelayAction(function () Control.CastSpell(HK_W, self.insecPosition) end, 0.18)
+                
+                DelayAction(function () Control.CastSpell(HK_R, self.target) end, 0.38)
+                return
+            end
+
+            if self.flashSlot and distanceFromPos > 50 and distanceFromPos < 300 then
+                self:delayAndDisableOrbwalker(0.55)
+                if Control.CastSpell(HK_R, self.target) then
+                    DelayAction(function () Control.CastSpell(HK_SUMMONER_1, self.insecPosition) end, 0.24)
+                end
+                return
+            end
+
+            
+        end
+
+        if isSpellReady(_Q)  and distance < self.qPrediction.Range + 50 then
+            if  string.find(myHero:GetSpellData(_Q).name, 'One')  then
+                castSpell(self.qPrediction, HK_Q, self.target)
+            else
+                Control.CastSpell(HK_Q)
+            end
+            self:delayAndDisableOrbwalker(0.1)
+            return
+        end
+
+        
+        if isSpellReady(_E) and distance < 200 then
+            Control.CastSpell(HK_E)
+            self:delayAndDisableOrbwalker(0.05)
+            return
+        end
+
+        
+        if isSpellReady(_W) and distance < 200 and 60 > myHero.health / myHero.maxHealth * 100 then
+            Control.CastSpell(HK_W, myHero)
+        end
+    end
+end
+
+function LeeSin:Clear()
+    local target = HealthPrediction:GetJungleTarget()
+    if not target then
+        target = HealthPrediction:GetLaneClearTarget()
+    end
+    if target then
+        if isSpellReady(_Q) then
+            Control.CastSpell(HK_Q, target.pos)
+            return
+        end
+        if isSpellReady(_E) then
+            Control.CastSpell(HK_E, target.pos)
+            return
+        end
+        if isSpellReady(_W) then
+            Control.CastSpell(HK_W, myHero)
+            return
+        end
+    end
+end
+function LeeSin:Harass()
+    local target = orbwalker:GetTarget()
+    if not target then
+        target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    end
+    if target then
+        local distance = myHero.pos:DistanceTo(target.pos) 
+       
+        if isSpellReady(_Q) and string.find(myHero:GetSpellData(_Q).name, 'One')  and distance < self.qPrediction.Range + 50 then
+            castSpell(self.qPrediction, HK_Q, target)
+            self:delayAndDisableOrbwalker(0.1)
+        end
+    end
+   
+end
 ----------------------------------------------------
 -- Script starts here
 ---------------------
