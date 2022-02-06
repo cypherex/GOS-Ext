@@ -1,5 +1,5 @@
 
-local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin"}
+local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin","Qiyana"}
 
 if not table.contains(Heroes, myHero.charName) then 
     print("DevX AIO does not support "+ myHero.charName)
@@ -180,8 +180,10 @@ end
 local function castSpell(spellData, hotkey, target)
     local pred = GGPrediction:SpellPrediction(spellData)
     pred:GetPrediction(target, myHero)
-    if pred:CanHit(GGPrediction.COLLISION_NORMAL) then
-        Control.CastSpell(hotkey, pred.CastPosition)	
+    if pred:CanHit(GGPrediction.HITCHANCE_NORMAL) then
+        if myHero.pos:DistanceTo(pred.CastPosition) <= spellData.Range + 15 then
+            Control.CastSpell(hotkey, pred.CastPosition)	
+        end
     end
 end
 
@@ -1681,6 +1683,7 @@ function LeeSin:__init()
     
     Callback.Add("Tick", function() self:onTickEvent() end)    
     Callback.Add("Draw", function() self:onDrawEvent() end)
+    self.nextQTimer = Game.Timer()
     
 end
 
@@ -1701,13 +1704,13 @@ end
 
 function LeeSin:onDrawEvent()
     if self.insecAlly then
-        --Draw.Circle(self.insecAlly.pos, 50, 1,  Draw.Color(255,0,255,0))
-        --Draw.Circle(self.insecPosition, 50, 1,  Draw.Color(255,0,0,255))
+        Draw.Circle(self.insecAlly.pos, 50, 1,  Draw.Color(255,0,255,0))
+        Draw.Circle(self.insecPosition, 50, 1,  Draw.Color(255,0,0,255))
         --Draw.Circle(self.target.pos, 50, 1,  Draw.Color(255,255,0,0))
     end
     if self.tripleUltTarget then
-        Draw.Circle(self.tripleUltPos, 50, 1,  Draw.Color(255,0,0,255))
-        Draw.Circle(self.tripleUltTarget.pos, 50, 1,  Draw.Color(255,255,0,0))
+       -- Draw.Circle(self.tripleUltPos, 50, 1,  Draw.Color(255,0,0,255))
+       -- Draw.Circle(self.tripleUltTarget.pos, 50, 1,  Draw.Color(255,255,0,0))
     end
 end
 
@@ -1762,7 +1765,7 @@ function LeeSin:identifyInsecOpportunity(target)
         end
     end
     if closestDistance < 2000 then
-        return closestAlly, target.pos + (target.pos - closestAlly.pos):Normalized() * 250
+        return closestAlly, target.pos + (target.pos - closestAlly.pos):Normalized() * 280
     end
     return nil, nil
 end
@@ -1874,7 +1877,7 @@ end
 
 function LeeSin:Flee()
 	if _nextSpellCast > Game.Timer() then return end	
-
+    if orbwalker:IsAutoAttacking() then return end
     if not isSpellReady(_W) and string.find(myHero:GetSpellData(_Q).name, 'One') then
         return
     end
@@ -1885,7 +1888,7 @@ function LeeSin:Flee()
         local distance = myHero.pos:DistanceTo(closestTarget.pos)
         if (distance  > 400 or not self.wardSlot) and distance < 700 then
             Control.CastSpell(HK_W, closestTarget)
-            self:delayAndDisableOrbwalker(0.3)
+            self:delayAndDisableOrbwalker(0.6)
             return
         end
     end
@@ -1895,18 +1898,17 @@ function LeeSin:Flee()
         local wardPosition = myHero.pos + (mousePos - myHero.pos):Normalized() * math.min(distance, 650)
 
         Control.CastSpell(self.wardKey, wardPosition)
-        DelayAction(function () Control.CastSpell(HK_W, wardPosition) end, 0.15)
-        self:delayAndDisableOrbwalker(0.3)
+        DelayAction(function () Control.CastSpell(HK_W, wardPosition) end, 0.2)
+        self:delayAndDisableOrbwalker(0.6)
     end
 
 end
 
 function LeeSin:Combo()
 	if _nextSpellCast > Game.Timer() then return end	
-
+    
     if self.target then
         local distance = myHero.pos:DistanceTo(self.target.pos) 
-
         if self.tripleUltTarget and isSpellReady(_R) then
             if myHero.pos.DistanceTo(self.tripleUltPos) > 200 then 
                 Control.Move(self.tripleUltPos)
@@ -1916,8 +1918,9 @@ function LeeSin:Combo()
             Control.CastSpell(HK_R, self.tripleUltTarget)
         end
         if self.insecPosition and isSpellReady(_R) and (self.flashSlot or self.wardSlot) and not self.tripleUltTarget then -- ward insec
-            local distanceFromPos = myHero.pos:DistanceTo(self.insecPosition)
             
+            
+            local distanceFromPos = myHero.pos:DistanceTo(self.insecPosition)
             if self.wardSlot and distanceFromPos > 50 and distanceFromPos < 400 then
                 self:delayAndDisableOrbwalker(0.55)
                 Control.CastSpell(self.wardKey, self.insecPosition)
@@ -1941,17 +1944,21 @@ function LeeSin:Combo()
         if isSpellReady(_Q)  and distance < self.qPrediction.Range + 50 then
             if  string.find(myHero:GetSpellData(_Q).name, 'One')  then
                 castSpell(self.qPrediction, HK_Q, self.target)
-            else
+
+                _nextSpellCast = Game.Timer() + 0.3
+                self.nextQTimer = Game.Timer() + 1
+            elseif Game.Timer() > self.nextQTimer then
+
                 Control.CastSpell(HK_Q)
+                _nextSpellCast = Game.Timer() + 0.3
             end
-            self:delayAndDisableOrbwalker(0.1)
             return
         end
 
         
         if isSpellReady(_E) and distance < 200 then
             Control.CastSpell(HK_E)
-            self:delayAndDisableOrbwalker(0.05)
+            _nextSpellCast = Game.Timer() + 0.3
             return
         end
 
@@ -1963,21 +1970,28 @@ function LeeSin:Combo()
 end
 
 function LeeSin:Clear()
+	if _nextSpellCast > Game.Timer() then return end
+    if orbwalker:IsAutoAttacking() then return end
+
     local target = HealthPrediction:GetJungleTarget()
     if not target then
         target = HealthPrediction:GetLaneClearTarget()
     end
     if target then
-        if isSpellReady(_Q) then
+        if isSpellReady(_Q) and Game.Timer() > self.nextQTimer then
             Control.CastSpell(HK_Q, target.pos)
+            _nextSpellCast = Game.Timer() + 0.7
+            self.nextQTimer = Game.Timer() + 1.2
             return
         end
         if isSpellReady(_E) then
             Control.CastSpell(HK_E, target.pos)
+            _nextSpellCast = Game.Timer() + 0.7
             return
         end
         if isSpellReady(_W) then
             Control.CastSpell(HK_W, myHero)
+            _nextSpellCast = Game.Timer() + 0.7
             return
         end
     end
@@ -1993,6 +2007,367 @@ function LeeSin:Harass()
         if isSpellReady(_Q) and string.find(myHero:GetSpellData(_Q).name, 'One')  and distance < self.qPrediction.Range + 50 then
             castSpell(self.qPrediction, HK_Q, target)
             self:delayAndDisableOrbwalker(0.1)
+        end
+    end
+   
+end
+
+
+--------------------------------------------------
+-- Qiyana
+--------------
+
+class "Qiyana"
+        
+function Qiyana:__init()	     
+    print("devX-Qiyana Loaded") 
+    self:LoadMenu()   
+
+    self.ELEMENT = {
+        NONE = 0,
+        ROCK = 1,
+        WATER = 2,
+        GRASS = 3
+    }
+
+    self.previousElement = self.ELEMENT.NONE
+    self.BEST_NEXT_ELEMENT = {
+        [self.ELEMENT.NONE] = { self.ELEMENT.WATER, self.ELEMENT.ROCK, self.ELEMENT.GRASS},
+        [self.ELEMENT.ROCK] = { self.ELEMENT.WATER, self.ELEMENT.GRASS, self.ELEMENT.ROCK},
+        [self.ELEMENT.WATER] = { self.ELEMENT.ROCK, self.ELEMENT.GRASS, self.ELEMENT.WATER},
+        [self.ELEMENT.GRASS] = { self.ELEMENT.ROCK, self.ELEMENT.WATER, self.ELEMENT.GRASS},
+    }
+    self.BEST_NEXT_ELEMENT_LOW = {
+        [self.ELEMENT.NONE] = { self.ELEMENT.WATER, self.ELEMENT.GRASS, self.ELEMENT.ROCK},
+        [self.ELEMENT.ROCK] = {  self.ELEMENT.GRASS, self.ELEMENT.WATER,  self.ELEMENT.ROCK},
+        [self.ELEMENT.WATER] = {  self.ELEMENT.GRASS, self.ELEMENT.ROCK, self.ELEMENT.GRASS, self.ELEMENT.WATER},
+        [self.ELEMENT.GRASS] = { self.ELEMENT.ROCK, self.ELEMENT.WATER, self.ELEMENT.GRASS},
+    }
+    Callback.Add("Tick", function() self:onTickEvent() end)    
+    Callback.Add("Draw", function() self:onDrawEvent() end)
+    
+end
+
+--
+-- Menu 
+function Qiyana:LoadMenu() --MainMenu
+    self.Menu = MenuElement({type = MENU, id = "devQiyana", name = "DevX Qiyana v1.0"})
+    -- ComboMenu  
+
+    
+end
+
+
+
+--------------------------------------------------
+-- Callbacks
+------------
+
+function Qiyana:onDrawEvent()
+    
+end
+
+function Qiyana:onTickEvent()
+    
+    self.hasWater = doesMyChampionHaveBuff("QiyanaQ_Water")
+    self.hasGrass = doesMyChampionHaveBuff("QiyanaQ_Grass")
+    self.hasRock = doesMyChampionHaveBuff("QiyanaQ_Rock")
+
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+        self:Combo()
+    end
+
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_HARASS] then
+        self:Harass()
+    end
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_JUNGLECLEAR] then
+        self:Clear()
+    end
+end
+----------------------------------------------------
+-- Other Functions
+---------------------
+
+function Qiyana:delayAndDisableOrbwalker(delay) 
+    _nextSpellCast = Game.Timer() + delay
+    orbwalker:SetMovement(false)
+    orbwalker:SetAttack(false)
+    DelayAction(function() 
+        orbwalker:SetMovement(true)
+        orbwalker:SetAttack(true)
+    end, delay)
+end
+
+function Qiyana:FindClosestElement(element)
+    -- add a target parameter
+    -- should try grab the closest position to target where possible
+    local startPos, mPos, height = Vector(myHero.pos), Vector(mousePos), myHero.pos.y
+    for i = 100, 2000, 100 do -- search range
+        local endPos = startPos:Extended(mPos, i)
+        for j = 20, 360, 20 do -- angle step
+            local testPos = Rotate(startPos, endPos, height, math.rad(j))
+            if testPos:ToScreen().onScreen then 
+                local foundElement =    (element == self.ELEMENT.ROCK and MapPosition:inWall(testPos)) or 
+                                        (element == self.ELEMENT.WATER and MapPosition:inRiver(testPos)) or 
+                                        (element == self.ELEMENT.GRASS and MapPosition:inBush(testPos))
+                if foundElement then
+                    return testPos
+                end
+            end
+        end
+    end
+    return nil
+end
+
+function Qiyana:FindClosestElementToTarget(element, target)
+    
+    -- add a target parameter
+    -- should try grab the closest position to target where possible
+    local startPos, mPos, height = Vector(myHero.pos), Vector(target), myHero.pos.y
+    for i = 100, 2000, 100 do -- search range
+        local endPos = startPos:Extended(mPos, i)
+        for j = 20, 360, 20 do -- angle step
+            local testPos = Rotate(startPos, endPos, height, math.rad(j))
+            if testPos:ToScreen().onScreen then 
+                local foundElement =    (element == self.ELEMENT.ROCK and MapPosition:inWall(testPos)) or 
+                                        (element == self.ELEMENT.WATER and MapPosition:inRiver(testPos)) or 
+                                        (element == self.ELEMENT.GRASS and MapPosition:inBush(testPos))
+                if foundElement then
+                    return testPos
+                end
+            end
+        end
+    end
+    return nil
+end
+
+function Qiyana:castW(comboMode, target)
+    local findElementList = nil
+    if myHero.health / myHero.maxHealth < 0.3 then 
+        findElementList = self.BEST_NEXT_ELEMENT_LOW[self.previousElement] 
+    else findElementList = self.BEST_NEXT_ELEMENT[self.previousElement] end
+    
+    for i, element in pairs(findElementList) do
+        local castPosition = nil
+
+        if comboMode then castPosition = self:FindClosestElementToTarget(element, target)     
+        else castPosition = self:FindClosestElement(element) end
+
+        if castPosition then
+            Control.CastSpell(HK_W, castPosition)
+            self.previousElement = element
+            return true
+        end
+    end
+    return false
+end
+
+function Qiyana:findBestETarget(target)
+    local closestTarget = nil
+    local closestDistance = math.huge
+
+    for i = 1, GameMinionCount() do
+        local minion = GameMinion(i)
+        if minion and isValid(minion) and not minion.isAlly then
+            local distance = minion.pos:DistanceTo(target.pos)
+            if distance < closestDistance and myHero.pos:DistanceTo(minion.pos) < 600 then
+                closestDistance = distance
+                closestTarget = minion
+            end
+        end
+    end
+
+    for i, enemy in pairs(getEnemyHeroesWithinDistance(500)) do
+        if enemy and isValid(enemy) and not enemy.dead then
+            local distance = enemy.pos:DistanceTo(target.pos)
+            if distance < closestDistance and myHero.pos:DistanceTo(enemy.pos) < 600 then
+                closestDistance = distance
+                closestTarget = enemy
+            end
+        end
+    end
+
+    return closestTarget
+    
+end
+----------------------------------------------------
+-- Combat Modes
+---------------------
+function Qiyana:performGapCloseCombo(useUlt, target)
+    local bestETarget = self:findBestETarget(target)
+    if bestETarget then
+        print("Gapclose")
+
+        local willUseUltimate = false
+    
+        local dmgWithoutUlt =  getdmg("Q", target, myHero) * 2 +  getdmg("W", target, myHero) +  getdmg("E", target, myHero) + getdmg("AA", target, myHero)
+        local dmgWithUlt = getdmg("R", target, myHero) + dmgWithoutUlt
+
+        if useUlt and target.health < dmgWithUlt and target.health > dmgWithoutUlt then
+            willUseUltimate = true
+        end
+        Control.CastSpell(HK_E, bestETarget)
+
+        if willUseUltimate then
+            
+            DelayAction(function () Control.CastSpell(HK_R, target) end, 0.25)
+            DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.4)
+            DelayAction(function () self:castW(true, target) end, 0.55)
+            DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.65)
+            self:delayAndDisableOrbwalker(1.3) 
+        
+        else
+            
+            DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.25)
+            DelayAction(function () self:castW(true, target) end, 0.48)
+            DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.63)
+            self:delayAndDisableOrbwalker(1.3) 
+
+        end
+        return true
+    end
+    return false
+end
+
+function Qiyana:performNormalCombo(useUlt, target)
+    print("EQWQ")
+    local willUseUltimate = false
+    
+    local dmgWithoutUlt =  getdmg("Q", target, myHero) * 2 +  getdmg("W", target, myHero) +  getdmg("E", target, myHero) 
+    local dmgWithUlt = getdmg("R", target, myHero) + dmgWithoutUlt
+
+    if useUlt and target.health < dmgWithUlt and target.health > dmgWithoutUlt then
+        willUseUltimate = true
+    end
+
+    if willUseUltimate then
+        Control.CastSpell(HK_R, target)
+        DelayAction(function () Control.CastSpell(HK_E, target) end, 0.3)
+        DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.45)
+        DelayAction(function () self:castW(true, target) end, 0.6)
+        DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.75)
+        self:delayAndDisableOrbwalker(1.5) 
+        
+    else
+        Control.CastSpell(HK_E, target)
+        DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.25)
+        DelayAction(function () self:castW(true, target) end, 0.4)
+        DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.6)
+        self:delayAndDisableOrbwalker(1.3) 
+    end
+    return true
+end
+
+function Qiyana:Combo()
+	if _nextSpellCast > Game.Timer() then return end	
+
+    local target = _G.SDK.TargetSelector:GetTarget(1300, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    local hasElement = self.hasGrass or self.hasRock or self.hasWater
+
+    
+    if not hasElement and isSpellReady(_W) then
+        self:castW(true, target)
+        self:delayAndDisableOrbwalker(0.3) 
+        return
+    end
+    if target then
+        local distance = myHero.pos:DistanceTo(target.pos)
+        local closestWall = FindClosestWall(target)
+        local canUseUlt = closestWall ~= nil and closestWall:DistanceTo(target.pos) < 600 and isSpellReady(_R)
+
+        if distance > 600 then
+            if self.hasWater and distance < 900 and isSpellReady(_Q) and isSpellReady(_W) and isSpellReady(_E) then
+                if self:performGapCloseCombo(canUseUlt, target) then
+                    return
+                end
+                
+            end
+        else
+            if hasElement and isSpellReady(_Q) and isSpellReady(_W) and isSpellReady(_E) then
+                if self:performNormalCombo(canUseUlt, target) then
+                    return
+                end
+            end
+
+            if not isSpellReady(_W) then
+                if isSpellReady(_Q) and hasElement and myHero:GetSpellData(_W).currentCd > 4.5 then
+                    print("Adhoc Empowered Q")
+                    Control.CastSpell(HK_Q, target)
+                    self:delayAndDisableOrbwalker(0.4) 
+                    return
+                elseif isSpellReady(_Q) and hasElement and myHero:GetSpellData(_W).currentCd > 4 then
+                    print("Adhoc Q")
+                    Control.CastSpell(HK_Q,target)
+                    self:delayAndDisableOrbwalker(0.4) 
+                    return
+                end
+
+                if isSpellReady(_E) and not isSpellReady(_Q) and not isSpellReady(_W) and myHero:GetSpellData(_W).currentCd > 3.5 then
+                    print("Adhoc E")
+                    Control.CastSpell(HK_E,target)
+                    self:delayAndDisableOrbwalker(0.4) 
+                    return
+                end
+            end
+        end
+        
+        
+    end
+    
+    
+end
+
+function Qiyana:Clear()
+    local target = HealthPrediction:GetJungleTarget()
+    if not target then
+        target = HealthPrediction:GetLaneClearTarget()
+    end
+    if target then
+        
+        local hasElement = self.hasGrass or self.hasRock or self.hasWater
+        if not hasElement and isSpellReady(_W) then 
+            self:castW()
+            
+        end
+
+        if isSpellReady(_Q) and (hasElement or myHero:GetSpellData(_W).currentCd > 4) then
+            Control.CastSpell(HK_Q, target)
+        end
+    end
+end
+function Qiyana:Harass()
+    local target = orbwalker:GetTarget()
+    if not target then
+        target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    end
+    
+    local hasElement = self.hasGrass or self.hasRock or self.hasWater
+    if not hasElement and isSpellReady(_W) then
+        self:castW()
+        self:delayAndDisableOrbwalker(0.3) 
+        return
+    end
+
+    if target then
+        if isSpellReady(_Q) and isSpellReady(_W) then
+            if myHero.pos:DistanceTo(target.pos) < 600 then
+                
+                Control.CastSpell(HK_Q, target) 
+                DelayAction(function () self:castW(true, target) end, 0.25)
+                DelayAction(function () Control.CastSpell(HK_Q, target) end, 4)
+                self:delayAndDisableOrbwalker(1.3) 
+                return
+            else
+                local anything = self:findBestETarget(target)
+                if anything then
+                    
+                    Control.CastSpell(HK_Q, target)
+                    DelayAction(function () self:castW(true, target) end, 0.25)
+                    DelayAction(function () Control.CastSpell(HK_Q, target) end, 4)
+                    self:delayAndDisableOrbwalker(1.3) 
+                    return
+                end
+            end
         end
     end
    
