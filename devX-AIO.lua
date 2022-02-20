@@ -2391,7 +2391,7 @@ function onLoadEvent()
     if table.contains(Heroes, myHero.charName) then
 		_G[myHero.charName]()
     else
-        print ("DevX-AIO does not support " + myHero.charName)
+        print ("DevX-AIO does not support " .. myHero.charName)
     end
 end
 
