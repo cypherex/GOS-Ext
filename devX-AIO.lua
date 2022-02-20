@@ -1595,7 +1595,10 @@ end
 ----------------------------------------------------
 -- Other Functions
 ---------------------
-
+function Zeri:castQ(target)
+    local qData = {Type = GGPrediction.SPELLTYPE_LINE, Range=self.qRange, Speed = 2600, Delay = 0.1, Radius = 80,  Collision = false, CollisionTypes = {}}
+    castSpell(qData,HK_Q, target)
+end
 function Zeri:assessWOptions(target)
     local distanceTarget = myHero.pos:DistanceTo(target.pos)
     --if distance >= 1550 then return end
@@ -1648,7 +1651,7 @@ function Zeri:Combo()
             self:assessWOptions(target)
         end
         if self.Menu.QSpell.QEnabled:Value() and distance < self.qRange and isSpellReady(_Q) and not orbwalker:IsAutoAttacking() then
-            Control.CastSpell(HK_Q, target)
+            self:castQ(target)
         end
 
         if self.Menu.ESpell.EEnabled:Value() and isSpellReady(_E) then
@@ -1673,7 +1676,7 @@ function Zeri:Harass()
         if self.hasPassive and distance <= self.aaRange then return end --lets use charged auto instead
         
         if self.Menu.QSpell.QHEnabled:Value() and myHero.pos:DistanceTo(target.pos) < self.qRange and isSpellReady(_Q) and not orbwalker:IsAutoAttacking()  then
-            Control.CastSpell(HK_Q, target)
+            self:castQ(target)
         end
 
     end
