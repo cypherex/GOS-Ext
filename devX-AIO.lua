@@ -532,7 +532,7 @@ class "RekSai"
     -- Combat Modes
     ---------------------
     function RekSai:Combo()
-        
+        print(Game.mapID)
         local target = _G.SDK.TargetSelector:GetTarget(1600, _G.SDK.DAMAGE_TYPE_MAGICAL);
         if isUnderground and target then
             local distance = getDistance(myHero.pos, target.pos)
@@ -694,6 +694,7 @@ class "RekSai"
     -- Combat Modes
     ---------------------
     function Elise:Combo()
+        
         local target = orbwalker:GetTarget(1200, _G.SDK.DAMAGE_TYPE_MAGICAL)
         if target then
             if not self.isInSpiderForm then
@@ -998,6 +999,7 @@ class "Syndra"
     end
 
     function Syndra:Combo()
+        
         local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
         
         if self.isInEQ or self.isInW then return end
@@ -1044,9 +1046,6 @@ class "Syndra"
 
             if distance < 820 and isSpellReady(_Q) then
                 castSpell(self.qSpellData, HK_Q, target)
-            elseif distance > 820 and isSpellReady(_Q) then
-                local qpos = myHero.pos + (target.pos - myHero.pos):Normalized() * 780
-                Control.CastSpell(HK_Q, qpos)
             end
 
             if isSpellReady(_W) and distance < 850 and not isSpellReady(_E) then
@@ -1067,7 +1066,7 @@ class "Syndra"
         if target then
             
             local distance = myHero.pos:DistanceTo(target.pos)
-            if distance < 850 and isSpellReady(_Q) then
+            if distance < 810 and isSpellReady(_Q) then
                 castSpell(self.qSpellData, HK_Q, target)
             end
 
@@ -1519,10 +1518,10 @@ function Zeri:__init()
                                 return isSpellReady(_Q)
                             end,
                             function ()
-                                return _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LASTHIT] and isSpellReady(_Q)
+                                return _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LASTHIT] and self.Menu.QSpell.QLHEnabled:Value() and isSpellReady(_Q)
                             end,
                             function ()
-                                return _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] and isSpellReady(_Q)
+                                return _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] and self.Menu.QSpell.QLCEnabled:Value()  and isSpellReady(_Q)
                             end,
                             function () 
                                 local levelDmg  = {10 , 15 , 20 , 25 , 30}
@@ -1531,7 +1530,7 @@ function Zeri:__init()
                                 return dmg
                             end
     )
-    orbwalker:OnPostAttack(function(...) self:onPostAttack(...) end )
+    
 end
 
 --
@@ -1539,11 +1538,24 @@ end
 function Zeri:LoadMenu() --MainMenu
     self.Menu = MenuElement({type = MENU, id = "devZeri", name = "DevX Zeri v1.0"})
     -- ComboMenu  
-
-    self.Menu:MenuElement({ id = "WTerrain", 
-                            name = "W only through Walls", 
-                            value = true})
     
+    self.Menu:MenuElement({ id = "BlockAuto", name = "Block auto without Q passive", value = true})
+
+    self.Menu:MenuElement({type = MENU, id = "QSpell", name = "Q"})
+        self.Menu.QSpell:MenuElement({ id = "QEnabled", name = "Combo Enabled", value = true})
+        self.Menu.QSpell:MenuElement({ id = "QHEnabled", name = "Harass Enabled", value = true})
+        self.Menu.QSpell:MenuElement({ id = "QLCEnabled", name = "Lane Clear Enabled", value = true})
+        self.Menu.QSpell:MenuElement({ id = "QLHEnabled", name = "LastHit Enabled", value = true})
+
+    self.Menu:MenuElement({type = MENU, id = "WSpell", name = "W"})
+        self.Menu.WSpell:MenuElement({ id = "WEnabled", name = "Combo Enabled", value = true})
+        self.Menu.WSpell:MenuElement({ id = "WTerrain", name = "Use only through Walls", value = true})
+
+    self.Menu:MenuElement({type = MENU, id = "ESpell", name = "E"})
+        self.Menu.ESpell:MenuElement({ id = "EEnabled", name = "Combo Enabled", value = true})
+    
+    self.Menu:MenuElement({type = MENU, id = "RSpell", name = "R"})
+        self.Menu.RSpell:MenuElement({ id = "RCount", name = "Use Ultimate when can hit >= X enemies", min = 0, max = 5, value=2})
 end
 
 
@@ -1552,21 +1564,11 @@ end
 -- Callbacks
 ------------
 
-function Zeri:onPostAttack()
-    
-    local target = orbwalker:GetTarget()
-    
-    if target then
-        if myHero.pos:DistanceTo(target.pos) < self.qRange and isSpellReady(_Q) then
-            Control.CastSpell(HK_Q, target)
-        end
-    end
-
-end
 
 function Zeri:onTickEvent()
     self.hasPassive = doesMyChampionHaveBuff("zeriqpassiveready")
-    if self.hasPassive then
+
+    if self.hasPassive and self.Menu.BlockAuto:Value() then
         orbwalker:SetAttack(true)
     else
         orbwalker:SetAttack(false)
@@ -1610,7 +1612,7 @@ function Zeri:assessWOptions(target)
                 end 
             end
             if target.pos:DistanceTo(testPosition) < 50 then -- it will hit champion before it hits wall
-                if not self.Menu.WTerrain:Value() then -- The user selected to allow hitting even when not through terrain
+                if not self.Menu.WSpell.WTerrain:Value() then -- The user selected to allow hitting even when not through terrain
                     Control.CastSpell(HK_W, testPosition)
                     return true
                 else
@@ -1642,13 +1644,22 @@ function Zeri:Combo()
         local distance = myHero.pos:DistanceTo(target.pos) 
         if self.hasPassive and distance <= self.aaRange then return end --lets use charged auto instead
         
-        if isSpellReady(_W) then
+        if isSpellReady(_W) and self.Menu.WSpell.WEnabled:Value() then
             self:assessWOptions(target)
         end
-        if distance < self.qRange and isSpellReady(_Q) and not orbwalker:IsAutoAttacking() then
+        if self.Menu.QSpell.QEnabled:Value() and distance < self.qRange and isSpellReady(_Q) and not orbwalker:IsAutoAttacking() then
             Control.CastSpell(HK_Q, target)
         end
 
+        if self.Menu.ESpell.EEnabled:Value() and isSpellReady(_E) then
+            local pos = myHero.pos + (mousePos - myHero.pos):Normalized() * 300
+            Control.CastSpell(HK_E, pos)
+        end
+
+        local closeEnemies = getEnemyHeroesWithinDistance(825)
+        if #closeEnemies >= self.Menu.RSpell.RCount:Value() then
+            Control.CastSpell(HK_R, myHero)
+        end
     end
 end
 
@@ -1661,7 +1672,7 @@ function Zeri:Harass()
         local distance = myHero.pos:DistanceTo(target.pos) 
         if self.hasPassive and distance <= self.aaRange then return end --lets use charged auto instead
         
-        if myHero.pos:DistanceTo(target.pos) < self.qRange and isSpellReady(_Q) and not orbwalker:IsAutoAttacking()  then
+        if self.Menu.QSpell.QHEnabled:Value() and myHero.pos:DistanceTo(target.pos) < self.qRange and isSpellReady(_Q) and not orbwalker:IsAutoAttacking()  then
             Control.CastSpell(HK_Q, target)
         end
 
@@ -1905,6 +1916,7 @@ function LeeSin:Flee()
 end
 
 function LeeSin:Combo()
+    
 	if _nextSpellCast > Game.Timer() then return end	
     
     if self.target then
