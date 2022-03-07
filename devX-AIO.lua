@@ -145,6 +145,16 @@ local function doesMyChampionHaveBuff(buffName)
     return false
 end
 
+local function getChampionBuffCount(buffName)
+    for i = 0, myHero.buffCount do
+        local buff = myHero:GetBuff(i)
+        if buff.name == buffName then 
+            return buff.count
+        end
+    end
+    return -1
+end
+
 local function printChampionBuffs(champ)
     for i = 0, champ.buffCount do
         local buff = champ:GetBuff(i)
@@ -927,7 +937,7 @@ class "Syndra"
                 local spellLine = ClosestPointOnLineSegment(gameObj.pos, myHero.pos, targetPosition)
                 local distance = myHero.pos:DistanceTo(gameObj.pos)
                 
-                if distance < 700 and gameObj.pos:DistanceTo(spellLine) < 70 then
+                if distance < 700 and gameObj.pos:DistanceTo(spellLine) < 67 then
                     return gameObj
                 end
             end
@@ -1023,7 +1033,12 @@ class "Syndra"
             end
 
             if isSpellReady(_E) then
-                
+                if distance < 1000 then
+                    self:castEQ(target, distance)
+                end
+
+                if self.isInEQ then return end
+
                 local ePos = self:getEObject(target.pos)
                 if ePos then
                     Control.CastSpell(HK_E, ePos)
@@ -1033,18 +1048,17 @@ class "Syndra"
                         orbwalker:SetMovement(true)
                         self.isInEQ = false
                     end, 0.2)
-
+                
+                    
                 end
                 --elseif distance < 650 then
                 --    self:castQE(target)
-                --elseif distance < 1200 then
-                --    self:castEQ(target, distance)
-                --end
+                
             end
             
             if self.isInEQ then return end
 
-            if distance < 820 and isSpellReady(_Q) then
+            if distance < 805 and isSpellReady(_Q) then
                 castSpell(self.qSpellData, HK_Q, target)
             end
 
@@ -1066,7 +1080,7 @@ class "Syndra"
         if target then
             
             local distance = myHero.pos:DistanceTo(target.pos)
-            if distance < 810 and isSpellReady(_Q) then
+            if distance < 807 and isSpellReady(_Q) then
                 castSpell(self.qSpellData, HK_Q, target)
             end
 
@@ -1247,6 +1261,14 @@ end
 function Gangplank:Combo()
 	if _nextSpellCast > Game.Timer() then return end	
 
+    for i = 1, Game.ObjectCount() do
+        local obj = Game.Object(i)
+        local name = string.lower(obj.charName)
+        if string.match(name, "dragon") or string.match(name, "soul") then
+            print(obj.charName)
+        end
+    end
+   
     local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
     if target == nil then return end
 
@@ -1690,14 +1712,16 @@ end
 class "LeeSin"
         
 function LeeSin:__init()	     
-    print("devX-LeeSin Loaded") 
+    print("devX-LeeSin Loaded2") 
     self:LoadMenu()   
     
     self.qPrediction = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Radius = 60, Range = 1200, Speed = 1800, Collision = true, CollisionTypes = {GGPrediction.COLLISION_MINION}}
     
+    print("x21")
     Callback.Add("Tick", function() self:onTickEvent() end)    
     Callback.Add("Draw", function() self:onDrawEvent() end)
     self.nextQTimer = Game.Timer()
+    self.passiveCount = 0
     
 end
 
@@ -1705,7 +1729,39 @@ end
 -- Menu 
 function LeeSin:LoadMenu() --MainMenu
     self.Menu = MenuElement({type = MENU, id = "devLeeSin", name = "DevX LeeSin v1.0"})
-    -- ComboMenu  
+
+
+    self.Menu:MenuElement({type = MENU, id = "Flee", name = "Flee"})
+        self.Menu.Flee:MenuElement({id = "Wards", name = "Wards", value = true})
+        self.Menu.Flee:MenuElement({id = "Allies", name = "Allies", value = true})
+        self.Menu.Flee:MenuElement({id = "Minions", name = "Minions", value = true})
+
+    self.Menu:MenuElement({type = MENU, id = "Clear", name = "Clear"})
+        self.Menu.Clear:MenuElement({id = "Enabled", name = "Enabled", value = true})
+        self.Menu.Clear:MenuElement({id = "Passive", name = "Manage Passive", value = true})
+        self.Menu.Clear:MenuElement({id = "QSpell", name = "[Q]", value = true})
+        self.Menu.Clear:MenuElement({id = "WSpell", name = "[W]", value = true})
+        self.Menu.Clear:MenuElement({id = "ESpell", name = "[E]", value = true})
+    
+    self.Menu:MenuElement({type = MENU, id = "Safeguard", name = "Safeguard"})
+        self.Menu.Safeguard:MenuElement({id = "HPCombo", name = "Combo - Min. HP Self", min = 1, max = 100, value = 60})
+        self.Menu.Safeguard:MenuElement({id = "HPAlly", name = "Combo - Min. HP Ally", min = 1, max = 100, value = 30})
+        self.Menu.Safeguard:MenuElement({id = "HPClear", name = "Clear - Min. HP Self", min = 1, max = 100, value = 100})
+
+    self.Menu:MenuElement({type = MENU, id = "Insec", name = "Insec"})  
+        self.Menu.Insec:MenuElement({id="Enabled", name = "Enabled", value = true, toggle = true})
+        self.Menu.Insec:MenuElement({id = "MinHP", name = "Target > X% HP", min = 1, max = 100, value = 15})
+        self.Menu.Insec:MenuElement({id = "WardJump", name = "Ward jump insec", value = true, toggle = true})
+        self.Menu.Insec:MenuElement({id = "Flash", name = "Flash insec", value = true, toggle = true})
+    
+
+    self.Menu:MenuElement({type = MENU, id = "Ultimate", name = "Ultimate Logic"})
+        self.Menu.Ultimate:MenuElement({type = MENU, id = "Duelling", name = "Duelling - Not implimented"})
+        self.Menu.Ultimate:MenuElement({type = MENU, id = "MultiUlt", name = "Multi-target ultimate"})
+            self.Menu.Ultimate.MultiUlt:MenuElement({id = "Enabled", name = "Enabled", value = true, toggle = true})
+            self.Menu.Ultimate.MultiUlt:MenuElement({id = "UltAmount", name = "Ult if hit >= x enemies", min = 1, max = 5, value = 2})
+            self.Menu.Ultimate.MultiUlt:MenuElement({id = "Walk", name = "Walk into position - 50 > dist < 200 ", value = true, toggle = true})
+            self.Menu.Ultimate.MultiUlt:MenuElement({id = "WardJump", name = "Ward jump into position - 200 > dist < 400", value = true, toggle = true})
 
     
 end
@@ -1731,12 +1787,18 @@ end
 function LeeSin:onTickEvent()
     self.wardSlot, self.wardKey = getWardSlot()
     self.flashSlot, self.flashKey = getFlashSlot()
-
+    self.passiveCount = getChampionBuffCount("blindmonkpassive_cosmetic")
+    
     local target = _G.SDK.TargetSelector:GetTarget(1800, _G.SDK.DAMAGE_TYPE_MAGICAL);
     self.target = target
 
     if self.target and isSpellReady(_R) then
-        self.insecAlly, self.insecPosition = self:identifyInsecOpportunity(target)
+        if self.Menu.Insec.Enabled:Value() then
+            self.insecAlly, self.insecPosition = self:identifyInsecOpportunity(target)
+        else
+            self.insecAlly, self.insecPosition = nil, nil
+        end
+
         self:identifyTripleUlt()
     end
     if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
@@ -1760,6 +1822,8 @@ end
 ---------------------
 
 function LeeSin:identifyInsecOpportunity(target)
+    if self.Menu.Insec.MinHP:Value() > hero.health / hero.maxHealth * 100  then return end
+
     local closestAlly = nil
     local closestDistance = math.huge
     for i = 1, GameTurretCount() do
@@ -1786,7 +1850,7 @@ end
 
 function LeeSin:identifyTripleUlt()
     local enemies = getEnemyHeroesWithinDistance(1200)
-    if #enemies < 3 then 
+    if #enemies < self.Menu.Ultimate.MultiUlt.UltAmount:Value() then 
         self.tripleUltTarget = nil;
         self.tripleUltPos = nil;
         return 
@@ -1795,9 +1859,12 @@ function LeeSin:identifyTripleUlt()
     self.tripleUltTarget = nil;
     self.tripleUltPos = nil;
 
+    if not self.Menu.Ultimate.MultiUlt.Enabled:Value() then return end
+
     for i, enemy in pairs(enemies) do
         local distance = enemy.pos:DistanceTo(myHero.pos)
-        if distance < 600 then
+        
+        if distance < 600 and self.Menu.Insec.MinHP:Value() < hero.health / hero.maxHealth * 100 then
             local startPos, mPos, height = Vector(myHero.pos), Vector(mousePos), myHero.pos.y
             for i = 200, 600, 25 do -- search range
                 local endPos = startPos:Extended(mPos, i)
@@ -1828,47 +1895,67 @@ function LeeSin:evaluateUlt(position, enemy, enemies)
             end
         end
     end
-    if count >= 2 then
+    if count >= self.Menu.Ultimate.MultiUlt.UltAmount:Value() then
         return true
     end
     return false
 end
 
-function LeeSin:getWardJumpTarget()
-    local closestTarget = nil
-    local closestDistance = math.huge
-
-    for i = 1, Game.WardCount() do
-        local ward = Game.Ward(i)
-        if ward and ward.valid and ward.isAlly then
-            local distance = mousePos:DistanceTo(ward.pos)
-            if distance < closestDistance then
-                closestDistance = distance
-                closestTarget = ward
-            end
-        end
-    end	
+function LeeSin:getAllyWTarget()
     
     for i = 1, GameHeroCount() do
         local hero = GameHero(i)
         if hero and not hero.dead and hero.isAlly and not hero.isMe then
             local distance = mousePos:DistanceTo(hero.pos)
             
-            if distance < closestDistance then
-                closestDistance = distance
-                closestTarget = hero
+            if distance < 700 and self.Menu.Safeguard.HPAlly:Value() > hero.health / hero.maxHealth * 100 then
+                return hero
+            end
+        end
+    end
+    return nil
+end
+function LeeSin:getWardJumpTarget()
+    local closestTarget = nil
+    local closestDistance = math.huge
+
+    if self.Menu.Flee.Wards:Value() then
+        for i = 1, Game.WardCount() do
+            local ward = Game.Ward(i)
+            if ward and ward.valid and ward.isAlly then
+                local distance = mousePos:DistanceTo(ward.pos)
+                if distance < closestDistance then
+                    closestDistance = distance
+                    closestTarget = ward
+                end
+            end
+        end	
+    end
+    
+    if self.Menu.Flee.Allies:Value() then
+        for i = 1, GameHeroCount() do
+            local hero = GameHero(i)
+            if hero and not hero.dead and hero.isAlly and not hero.isMe then
+                local distance = mousePos:DistanceTo(hero.pos)
+                
+                if distance < closestDistance then
+                    closestDistance = distance
+                    closestTarget = hero
+                end
             end
         end
     end
     
-    for i = 1, GameMinionCount() do
-        local minion = GameMinion(i)
-        if minion and minion.isAlly and not minion.dead then
-            local distance = mousePos:DistanceTo(minion.pos)
-            
-            if distance < closestDistance then
-                closestDistance = distance
-                closestTarget = minion
+    if self.Menu.Flee.Minions:Value() then
+        for i = 1, GameMinionCount() do
+            local minion = GameMinion(i)
+            if minion and minion.isAlly and not minion.dead then
+                local distance = mousePos:DistanceTo(minion.pos)
+                
+                if distance < closestDistance then
+                    closestDistance = distance
+                    closestTarget = minion
+                end
             end
         end
     end
@@ -1907,13 +1994,15 @@ function LeeSin:Flee()
         end
     end
 
-    if self.wardSlot then
+    if self.wardSlot and self.Menu.Flee.Wards:Value() then
         local distance = mousePos:DistanceTo(myHero.pos)
         local wardPosition = myHero.pos + (mousePos - myHero.pos):Normalized() * math.min(distance, 650)
-
+        
+        self:delayAndDisableOrbwalker(0.6)
+        
         Control.CastSpell(self.wardKey, wardPosition)
         DelayAction(function () Control.CastSpell(HK_W, wardPosition) end, 0.2)
-        self:delayAndDisableOrbwalker(0.6)
+        
     end
 
 end
@@ -1924,19 +2013,27 @@ function LeeSin:Combo()
     
     if self.target then
         local distance = myHero.pos:DistanceTo(self.target.pos) 
-        if self.tripleUltTarget and isSpellReady(_R) then
-            if myHero.pos.DistanceTo(self.tripleUltPos) > 200 then 
+        if self.Menu.Ultimate.MultiUlt.Enabled:Value() and self.tripleUltTarget and isSpellReady(_R) then
+            local distTriple = myHero.pos.DistanceTo(self.tripleUltPos) 
+            if self.Menu.Ultimate.MultiUlt.Walk:Value() and distTriple > 100 and distTriple < 200 then 
                 Control.Move(self.tripleUltPos)
                 self:delayAndDisableOrbwalker(0.2)
                 return
+            elseif self.Menu.Ultimate.MultiUlt.WardJump:Value() and distTriple > 400 and self.wardSlot then
+                self:delayAndDisableOrbwalker(0.55)
+                Control.CastSpell(self.wardKey, self.insecPosition)
+                DelayAction(function () Control.CastSpell(HK_W, self.insecPosition) end, 0.18)
+                
+                DelayAction(function () Control.CastSpell(HK_R, self.target) end, 0.38)
+            elseif distTriple < 100 then
+                Control.CastSpell(HK_R, self.tripleUltTarget)
             end
-            Control.CastSpell(HK_R, self.tripleUltTarget)
         end
-        if self.insecPosition and isSpellReady(_R) and (self.flashSlot or self.wardSlot) and not self.tripleUltTarget then -- ward insec
-            
-            
+
+        if self.Menu.Insec.Enabled:Value() and self.insecPosition and isSpellReady(_R) and (self.flashSlot or self.wardSlot) and not self.tripleUltTarget then 
+            -- ward insec    
             local distanceFromPos = myHero.pos:DistanceTo(self.insecPosition)
-            if self.wardSlot and distanceFromPos > 50 and distanceFromPos < 400 then
+            if self.Menu.Insec.WardJump:Value() and self.wardSlot and distanceFromPos > 50 and distanceFromPos < 400 then
                 self:delayAndDisableOrbwalker(0.55)
                 Control.CastSpell(self.wardKey, self.insecPosition)
                 DelayAction(function () Control.CastSpell(HK_W, self.insecPosition) end, 0.18)
@@ -1945,7 +2042,7 @@ function LeeSin:Combo()
                 return
             end
 
-            if self.flashSlot and distanceFromPos > 50 and distanceFromPos < 300 then
+            if self.Menu.Insec.Flash:Value() and self.flashSlot and distanceFromPos > 50 and distanceFromPos < 300 then
                 self:delayAndDisableOrbwalker(0.55)
                 if Control.CastSpell(HK_R, self.target) then
                     DelayAction(function () Control.CastSpell(HK_SUMMONER_1, self.insecPosition) end, 0.24)
@@ -1961,7 +2058,10 @@ function LeeSin:Combo()
                 castSpell(self.qPrediction, HK_Q, self.target)
 
                 _nextSpellCast = Game.Timer() + 0.3
-                self.nextQTimer = Game.Timer() + 1
+                
+                if distance < 400 then
+                    self.nextQTimer = Game.Timer() + 1
+                end
             elseif Game.Timer() > self.nextQTimer then
 
                 Control.CastSpell(HK_Q)
@@ -1978,33 +2078,41 @@ function LeeSin:Combo()
         end
 
         
-        if isSpellReady(_W) and distance < 200 and 60 > myHero.health / myHero.maxHealth * 100 then
-            Control.CastSpell(HK_W, myHero)
+        if isSpellReady(_W) then 
+            local allyTarget = self:getAllyWTarget()
+            if allyTarget then
+                Control.CastSpell(HK_W, allyTarget)
+            elseif distance < 200 and self.Menu.Safeguard.HPCombo:Value()  > myHero.health / myHero.maxHealth * 100 then
+                Control.CastSpell(HK_W, myHero)
+            end
         end
     end
 end
 
 function LeeSin:Clear()
-	if _nextSpellCast > Game.Timer() then return end
+	if not self.Menu.Clear.Enabled:Value() then return end
+    if _nextSpellCast > Game.Timer() then return end
     if orbwalker:IsAutoAttacking() then return end
+
+    if self.passiveCount > 0 and self.Menu.Clear.Passive:Value() then return end
 
     local target = HealthPrediction:GetJungleTarget()
     if not target then
         target = HealthPrediction:GetLaneClearTarget()
     end
     if target then
-        if isSpellReady(_Q) and Game.Timer() > self.nextQTimer then
+        if self.Menu.Clear.QSpell:Value() and isSpellReady(_Q) and Game.Timer() > self.nextQTimer then
             Control.CastSpell(HK_Q, target.pos)
             _nextSpellCast = Game.Timer() + 0.7
             self.nextQTimer = Game.Timer() + 1.2
             return
         end
-        if isSpellReady(_E) then
+        if self.Menu.Clear.ESpell:Value() and isSpellReady(_E) then
             Control.CastSpell(HK_E, target.pos)
             _nextSpellCast = Game.Timer() + 0.7
             return
         end
-        if isSpellReady(_W) then
+        if self.Menu.Clear.WSpell:Value() and isSpellReady(_W) and self.Menu.Safeguard.HPClear:Value()  > myHero.health / myHero.maxHealth * 100 then
             Control.CastSpell(HK_W, myHero)
             _nextSpellCast = Game.Timer() + 0.7
             return
