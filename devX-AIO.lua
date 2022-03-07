@@ -2,7 +2,7 @@
 local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin","Qiyana"}
 
 if not table.contains(Heroes, myHero.charName) then 
-    print("DevX AIO does not support "+ myHero.charName)
+    print("DevX AIO does not support " .. myHero.charName)
     return 
 end
 
@@ -1822,7 +1822,7 @@ end
 ---------------------
 
 function LeeSin:identifyInsecOpportunity(target)
-    if self.Menu.Insec.MinHP:Value() > hero.health / hero.maxHealth * 100  then return end
+    if self.Menu.Insec.MinHP:Value() > target.health / target.maxHealth * 100  then return end
 
     local closestAlly = nil
     local closestDistance = math.huge
@@ -1864,7 +1864,7 @@ function LeeSin:identifyTripleUlt()
     for i, enemy in pairs(enemies) do
         local distance = enemy.pos:DistanceTo(myHero.pos)
         
-        if distance < 600 and self.Menu.Insec.MinHP:Value() < hero.health / hero.maxHealth * 100 then
+        if distance < 600 and self.Menu.Insec.MinHP:Value() < enemy.health / enemy.maxHealth * 100 then
             local startPos, mPos, height = Vector(myHero.pos), Vector(mousePos), myHero.pos.y
             for i = 200, 600, 25 do -- search range
                 local endPos = startPos:Extended(mPos, i)
