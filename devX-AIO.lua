@@ -1756,7 +1756,7 @@ function LeeSin:LoadMenu() --MainMenu
     
 
     self.Menu:MenuElement({type = MENU, id = "Ultimate", name = "Ultimate Logic"})
-        self.Menu.Ultimate:MenuElement({type = MENU, id = "Duelling", name = "Duelling - Not implimented"})
+        self.Menu.Ultimate:MenuElement({type = MENU, id = "Duelling", name = "Duelling - Not implemented"})
         self.Menu.Ultimate:MenuElement({type = MENU, id = "MultiUlt", name = "Multi-target ultimate"})
             self.Menu.Ultimate.MultiUlt:MenuElement({id = "Enabled", name = "Enabled", value = true, toggle = true})
             self.Menu.Ultimate.MultiUlt:MenuElement({id = "UltAmount", name = "Ult if hit >= x enemies", min = 1, max = 5, value = 2})
