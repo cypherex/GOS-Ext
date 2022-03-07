@@ -2062,7 +2062,7 @@ function LeeSin:Combo()
                 if distance < 400 then
                     self.nextQTimer = Game.Timer() + 1
                 end
-            elseif Game.Timer() > self.nextQTimer then
+            elseif Game.Timer() > self.nextQTimer or  distance > 400   then
 
                 Control.CastSpell(HK_Q)
                 _nextSpellCast = Game.Timer() + 0.3
