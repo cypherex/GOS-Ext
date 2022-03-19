@@ -2686,8 +2686,7 @@ class "Karthus"
             Control.CastSpell(HK_R)
         elseif count >= self.Menu.AutoUlt.MinAlive:Value() then
             local enemiesInRange = #getEnemyHeroesWithinDistance(self.Menu.AutoUlt.AliveBlockRange:Value())
-            print("R")
-            print(enemiesInRange)
+            
             if enemiesInRange == 0  then
                 Control.CastSpell(HK_R)
             end
