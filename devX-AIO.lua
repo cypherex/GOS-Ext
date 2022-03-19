@@ -2685,7 +2685,9 @@ class "Karthus"
         if doesMyChampionHaveBuff("KarthusDeathDefiedBuff") and count >= self.Menu.AutoUlt.MinDead:Value() then
             Control.CastSpell(HK_R)
         elseif count >= self.Menu.AutoUlt.MinAlive:Value() then
-            local enemiesInRange = #getEnemyHeroesWithinDistance(self.Menu.AutoUlt.AliveBlockRange)
+            local enemiesInRange = #getEnemyHeroesWithinDistance(self.Menu.AutoUlt.AliveBlockRange:Value())
+            print("R")
+            print(enemiesInRange)
             if enemiesInRange == 0  then
                 Control.CastSpell(HK_R)
             end
