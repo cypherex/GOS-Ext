@@ -2878,7 +2878,7 @@ class "Rengar"
                     return
                 end
                 
-                if isSpellReady(_W) and self.canUseW then
+                if isSpellReady(_W) then
                     Control.CastSpell(HK_W);
                     return
                 end
