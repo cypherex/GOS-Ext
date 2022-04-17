@@ -1,5 +1,5 @@
 
-local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin","Qiyana","Karthus"}
+local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin","Qiyana","Karthus","Rengar"}
 
 if not table.contains(Heroes, myHero.charName) then 
     print("DevX AIO does not support " .. myHero.charName)
@@ -332,7 +332,7 @@ class "Swain"
 
         -- Auto Menu
         self.Menu:MenuElement({type = MENU, id = "Auto", name = "Auto"})
-            self.Menu.Auto:MenuElement{{id="PullRoot", "Pull rooted enemies", value = true}}
+            self.Menu.Auto:MenuElement{{id="PullRoot", name="Pull rooted enemies", value = true}}
             self.Menu.Auto:MenuElement({id = "W", name = "Use W on Root", value = true})
         
             
@@ -2531,7 +2531,7 @@ class "Karthus"
                 self.Menu.Harass:MenuElement({id = "Q", name = "[Q]", value = true})
                 
             self.Menu:MenuElement({type = MENU, id = "LaneClear", name = "Lane Clear"})
-                self.Menu.LaneClear:MenuElement({id = "Q", name = "[Q]", value = true, key=string.byte("T")})
+                self.Menu.LaneClear:MenuElement({id = "Q", name = "[Q]", value = true, key=string.byte("T"), toggle = true})
             
             self.Menu:MenuElement({type = MENU, id = "JungleClear", name = "Jungle Clear"})
                 self.Menu.JungleClear:MenuElement({id = "Q", name = "[Q]", value = true})
@@ -2551,6 +2551,16 @@ class "Karthus"
             Draw.Text("Lane Clear Enabled [T]", 15, hero2d.x - 30, hero2d.y + 30, Draw.Color(255, 0, 255, 0))
         else
             Draw.Text("Lane Clear Disabled [T]", 15, hero2d.x - 30, hero2d.y + 30, Draw.Color(255, 255, 0, 0))
+        end
+
+        
+        for i, champ in pairs(getEnemyHeroes()) do
+            			
+            local RDmg = getdmg("R", champ)
+            local Hp = champ.health + (6 * champ.hpRegen)
+            if champ.health <= RDmg then
+                Draw.Text(champ.charName .. " - " .. Hp .. " % HP", 15, 10, 70 + i*15, Draw.Color(255, 0, 255, 0))
+            end	
         end
     end
 
@@ -2599,15 +2609,16 @@ class "Karthus"
                 end
             end	
             
-            local num_enemies = #getEnemyHeroesWithinDistance(550)
-            local toggled = doesMyChampionHaveBuff("KarthusDefile")
-
-            if num_enemies == 0 and toggled then
-                Control.CastSpell(HK_E)
-            elseif self.Menu.Combo.E:Value() and num_enemies >= 1 and not toggled then
-                Control.CastSpell(HK_E)
+            if not myHero.dead then
+                    
+                local num_enemies = #getEnemyHeroesWithinDistance(550)
+                local toggled = doesMyChampionHaveBuff("KarthusDefile")
+                if num_enemies == 0 and toggled then
+                    Control.CastSpell(HK_E)
+                elseif self.Menu.Combo.E:Value() and num_enemies >= 1 and not toggled then
+                    Control.CastSpell(HK_E)
+                end
             end
-
             orbwalker:SetAttack(true)
         end
     end
@@ -2693,6 +2704,188 @@ class "Karthus"
 
         end
     end
+
+
+--------------------------------------------------
+-- Karthus
+--------------
+class "Rengar"
+        
+    function Rengar:__init()	     
+        print("devX-Rengar Loaded") 
+        
+        self:LoadMenu()   
+        Callback.Add("Draw", function() self:Draw() end)           
+        Callback.Add("Tick", function() self:onTickEvent() end)    
+        self.lastAuto = Game.Timer()
+           
+        orbwalker:OnPostAttack(function(...) self:PostAuto(...) end) 
+        self.lastMode = ""
+        self.lastHP = myHero.health
+        self.nextCheck = Game.Timer()
+        self.eSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Radius = 70, Range = 1000, Speed = 1500, Collision = true, CollisionTypes = {GGPrediction.COLLISION_MINION}}
+    end
+
+    --
+    -- Menu 
+    function Rengar:LoadMenu() --MainMenu
+        
+
+        self.Menu = MenuElement({type = MENU, id = "devRengar", name = "DevX Rengar Alpha"})
+        self.Menu:MenuElement({name = "Empowered [Q] or [E]", id = "EmpoweredQ", value = true, key=string.byte("T"), toggle = true})
+    end
+
+    function Rengar:Draw()
+        local hero2d = myHero.pos2D
+        if self.Menu.EmpoweredQ:Value() then
+            Draw.Text("Empowered [Q] - [T]", 15, hero2d.x - 30, hero2d.y + 30, Draw.Color(255, 0, 255, 0))
+        else
+            Draw.Text("Empowered [E] - [T]", 15, hero2d.x - 30, hero2d.y + 30, Draw.Color(255, 255, 0, 0))
+        end
+
+    end
+
+
+    --------------------------------------------------
+    -- Callbacks
+    ------------
+    function Rengar:onTickEvent()
+
+        if doesMyChampionHaveBuff("RengarR") then
+            UltActive = true 
+        else
+            UltActive = false
+        end
+        
+        if myHero.mana == 4 and isSpellReady(_W) and isTargetImmobile(myHero)  then
+            Control.CastSpell(HK_W, myHero)
+        end
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+            self:Combo()
+        end
+
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_HARASS] then
+            self:Harass()
+        end
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] then
+            self:LaneClear()
+        end
+    end
+    
+    ----------------------------------------------------
+    -- Combat Modes
+    ---------------------
+    
+
+    function Rengar:Combo()
+        
+        self.lastMode = "combo"
+        local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+        if target   then
+
+            if UltActive then
+                if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < 850 then 
+                    Control.CastSpell(HK_Q) 
+                end
+                if isSpellReady(_E) and myHero.pathing.isDashing and myHero.pathing.dashSpeed > 500 then 
+                    Control.CastSpell(HK_E, target) 
+                end
+            else
+                
+                if _G.SDK.Attack:IsActive() then return end
+                if Game.Timer() - self.lastAuto > 1 then return end
+
+
+                if isSpellReady(_Q) then 
+                    if myHero.pos:DistanceTo(target.pos) < 400 and (myHero.mana < 4 or self.Menu.EmpoweredQ:Value()) then	
+                        Control.CastSpell(HK_Q)
+                        Control.Attack(target)
+                        _nextSpellCast = Game.Timer() + 0.32
+                        orbwalker:__OnAutoAttackReset()
+                        return
+                    end
+                end
+                
+                if _nextSpellCast > Game.Timer() then return end	
+                    if isSpellReady(_W) and myHero.mana < 4  then 
+                        if myHero.pos:DistanceTo(target.pos) < 450 then
+                            Control.CastSpell(HK_W)
+                            return
+                        end
+                    end
+                    if isSpellReady(_E) then 
+                        
+                        if myHero.pos:DistanceTo(target.pos) < 1000 and (myHero.mana < 4 or not self.Menu.EmpoweredQ:Value()) then
+                            castSpell(self.eSpellData, HK_E, target)
+                            return
+                        end
+                    end
+                end
+            end
+    end
+
+
+    function Rengar:Harass()
+            local target = orbwalker:GetTarget();
+    end
+
+    function Rengar:PostAuto()
+        
+        self.lastAuto = Game.Timer()
+        if myHero.mana == 4 and not self.Menu.EmpoweredQ:Value() and self.lastMode == "combo" then return end
+
+        local target = orbwalker:GetTarget();
+
+        
+        if target ~= nil and isSpellReady(_Q) then
+
+            Control.CastSpell(HK_Q)
+            Control.Attack(target)
+            _nextSpellCast = Game.Timer() + 0.32
+            orbwalker:__OnAutoAttackReset()
+            return
+        end
+
+    end
+
+    function Rengar:LaneClear()
+
+        if _G.SDK.Attack:IsActive() then return end
+        if Game.Timer() - self.lastAuto > 1 then return end
+        self.lastMode = "clear"
+
+        local jungle = HealthPrediction:GetJungleTarget()
+        if jungle == nil then
+            jungle = HealthPrediction:GetLaneClearTarget()
+        end
+        if jungle ~= nil then
+            
+
+            if isSpellReady(_Q) then 
+                if myHero.pos:DistanceTo(jungle.pos) < 400 then	
+                    Control.CastSpell(HK_Q)
+                    Control.Attack(jungle)
+                    _nextSpellCast = Game.Timer() + 0.32
+                    orbwalker:__OnAutoAttackReset()
+                    return
+                end
+            end
+            if _nextSpellCast > Game.Timer() then return end	
+
+            if myHero.mana < 4 and not isSpellReady(_Q) then 
+                if isSpellReady(_E) then
+                    Control.CastSpell(HK_E, jungle);
+                    return
+                end
+                
+                if isSpellReady(_W) and self.canUseW then
+                    Control.CastSpell(HK_W);
+                    return
+                end
+            end
+        end
+    end
+
 ----------------------------------------------------
 -- Script starts here
 ---------------------
