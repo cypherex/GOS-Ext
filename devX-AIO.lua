@@ -1546,9 +1546,12 @@ function Zeri:__init()
                                 return _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] and self.Menu.QSpell.QLCEnabled:Value()  and isSpellReady(_Q)
                             end,
                             function () 
-                                local levelDmg  = {10 , 15 , 20 , 25 , 30}
-                                levelDmg = levelDmg[myHero:GetSpellData(_Q).level]
-                                local dmg = levelDmg + myHero.totalDamage*1.1 
+                                local levelDmgTbl  = {7 , 9 , 11 , 13 , 15}
+                                local levelPctTbl  = {1.1 , 1.125 , 1.15 , 1.17 , 1.2}
+
+                                local levelDmg = levelDmgTbl[myHero:GetSpellData(_Q).level]
+                                local levelPct = levelPctTbl[myHero:GetSpellData(_Q).level]
+                                local dmg = levelDmg + myHero.totalDamage*levelPct
                                 return dmg
                             end
     )
@@ -1592,7 +1595,7 @@ function Zeri:onTickEvent()
 
     if self.hasPassive and self.Menu.BlockAuto:Value() then
         orbwalker:SetAttack(true)
-    else
+    elseif not self.hasPassive then
         orbwalker:SetAttack(false)
     end
 
@@ -2506,7 +2509,7 @@ class "Karthus"
         
         self:LoadMenu()   
         
-        self.qSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.75, Radius = 160, Range = 870, Speed = math.huge, Collision = false}
+        self.qSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.2, Radius = 160, Range = 870, Speed = math.huge, Collision = false}
         self.nextQTimer = Game.Timer()
         Callback.Add("Draw", function() self:Draw() end)           
         Callback.Add("Tick", function() self:onTickEvent() end)    
@@ -2760,7 +2763,9 @@ class "Rengar"
         if myHero.mana == 4 and isSpellReady(_W) and isTargetImmobile(myHero)  then
             Control.CastSpell(HK_W, myHero)
         end
+
         if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+            
             self:Combo()
         end
 
@@ -2768,6 +2773,7 @@ class "Rengar"
             self:Harass()
         end
         if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] then
+            
             self:LaneClear()
         end
     end
@@ -2799,9 +2805,14 @@ class "Rengar"
                 if isSpellReady(_Q) then 
                     if myHero.pos:DistanceTo(target.pos) < 400 and (myHero.mana < 4 or self.Menu.EmpoweredQ:Value()) then	
                         Control.CastSpell(HK_Q)
-                        Control.Attack(target)
-                        _nextSpellCast = Game.Timer() + 0.32
+
+                        DelayAction(
+                            function() 
+                                Control.Attack(target)
+                            end, 0.05
+                        )
                         orbwalker:__OnAutoAttackReset()
+                        _nextSpellCast = Game.Timer() + 0.32
                         return
                     end
                 end
@@ -2840,7 +2851,12 @@ class "Rengar"
         if target ~= nil and isSpellReady(_Q) then
 
             Control.CastSpell(HK_Q)
-            Control.Attack(target)
+            
+            DelayAction(
+                function() 
+                    Control.Attack(target)
+                end, 0.05
+            )
             _nextSpellCast = Game.Timer() + 0.32
             orbwalker:__OnAutoAttackReset()
             return
@@ -2864,7 +2880,11 @@ class "Rengar"
             if isSpellReady(_Q) then 
                 if myHero.pos:DistanceTo(jungle.pos) < 400 then	
                     Control.CastSpell(HK_Q)
-                    Control.Attack(jungle)
+                    DelayAction(
+                        function() 
+                            Control.Attack(jungle)
+                        end, 0.05
+                    )
                     _nextSpellCast = Game.Timer() + 0.32
                     orbwalker:__OnAutoAttackReset()
                     return
