@@ -2710,7 +2710,7 @@ class "Karthus"
 
 
 --------------------------------------------------
--- Karthus
+-- Rengar
 --------------
 class "Rengar"
         
@@ -2905,6 +2905,121 @@ class "Rengar"
             end
         end
     end
+
+    
+--------------------------------------------------
+-- Soraka
+--------------
+class "Soraka"
+        
+function Soraka:__init()	     
+    print("devX-Soraka Loaded") 
+    
+    self:LoadMenu()   
+    Callback.Add("Draw", function() self:Draw() end)           
+    Callback.Add("Tick", function() self:onTickEvent() end)    
+       
+
+    self.qSpell = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.5, Radius = 235, Range = 800, Speed = 1750, Collision = false}
+    self.eSpell = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.5, Radius = 250, Range = 925, Speed = 1750, Collision = false}
+end
+
+--
+-- Menu 
+function Soraka:LoadMenu() --MainMenu
+    self.Menu = MenuElement({type = MENU, id = "devSoraka", name = "DevX Soraka"})
+
+    self.Menu:MenuElement({id = "WHP", name = "W Min. HP %", value = 50, min=0, max=100})
+    self.Menu:MenuElement({id = "UltHP", name = "Ultimate Min. HP %", value = 20, min=0, max=100})
+    self.Menu:MenuElement({type = MENU, id = "UltWhitelist", name = "Ultimate white list"})
+    
+    for i = 1, GameHeroCount() do
+        local hero = GameHero(i)
+        if hero and hero.isAlly and not hero.isMe then 
+            self.Menu.UltWhitelist:MenuElement({id = hero.charName, name = hero.charName, toggle = true, value = true})
+        end
+    end
+end
+
+function Soraka:Draw()
+end
+
+
+--------------------------------------------------
+-- Callbacks
+------------
+function Soraka:onTickEvent()
+
+    self:authHeal()
+    self:EonImmobile()
+
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+        self:Combo()
+    end
+
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_HARASS] then
+        self:Harass()
+    end
+    
+end
+
+----------------------------------------------------
+-- Combat Modes
+---------------------
+
+function Soraka:EonImmobile()
+    local heroes = getEnemyHeroesWithinDistance(920)
+    if heroes then
+        for i, enemy in pairs(heroes) do
+            if enemy and not enemy.dead then
+                if isTargetImmobile(enemy) then
+                    Control.CastSpell(HK_E, enemy)
+                end
+            end
+        end
+    end
+end
+
+function Soraka:autoHeal()
+    local healTarget = nil
+    for i = 1, GameHeroCount() do
+        local hero = GameHero(i)
+        if hero and not hero.dead and hero.isAlly and not hero.isMe then 
+            if isSpellReady(_R) and self.Menu.UltWhitelist[hero.charName]:Value() and hero.health / hero.maxHealth * 100 < self.Menu.UltHP:Value() then
+                Control.CastSpell(HK_R)
+            end
+            if myHero.pos:DistanceTo(hero.pos) <= 550 and hero.health / hero.maxHealth * 100 < self.Menu.WHP:Value() then
+                Control.CastSpell(HK_W, hero)
+            end
+        end
+    end
+end
+
+function Soraka:Combo()
+    local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    if target then
+        if isSpellReady(_Q) then
+            castSpell(self.qSpellData, HK_Q, target)
+        end
+    end
+end
+
+
+function Soraka:Harass()
+    local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    if target then
+        if isSpellReady(_Q) then
+            castSpell(self.qSpellData, HK_Q, target)
+        end
+        
+        if isSpellReady(_E) then
+            castSpell(self.eSpellData, HK_E, target)
+        end
+    end
+    
+end
+
+
 
 ----------------------------------------------------
 -- Script starts here
