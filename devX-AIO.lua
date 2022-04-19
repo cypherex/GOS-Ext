@@ -3125,7 +3125,7 @@ class "Mordekaiser"
 
 
     function Mordekaiser:Harass()
-        local target = orbwalker:GetTarget();
+        local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
         if target then
             
             if self.Menu.Harass.E:Value() and isSpellReady(_E) and myHero.pos:DistanceTo(target.pos) < self.eSpell.Range then
