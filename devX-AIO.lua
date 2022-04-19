@@ -1,5 +1,5 @@
 
-local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin","Qiyana","Karthus","Rengar"}
+local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin","Qiyana","Karthus","Rengar", "Soraka", "Mordekaiser"}
 
 if not table.contains(Heroes, myHero.charName) then 
     print("DevX AIO does not support " .. myHero.charName)
@@ -3020,6 +3020,186 @@ function Soraka:Harass()
 end
 
 
+--------------------------------------------------
+-- Rengar
+--------------
+class "Mordekaiser"
+        
+    function Mordekaiser:__init()	     
+        print("devX-Mordekaiser Loaded") 
+        
+        self:LoadMenu()   
+        Callback.Add("Draw", function() self:Draw() end)           
+        Callback.Add("Tick", function() self:onTickEvent() end)    
+        
+        self.qSpell = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.4, Radius = 200, Range = 675, Speed = MathHuge, Collision = false}
+        self.eSpell = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.9, Radius = 120, Range = 900, Speed = MathHuge, Collision = false}
+
+    end
+
+    --
+    -- Menu 
+    function Mordekaiser:LoadMenu() --MainMenu
+        
+
+        self.Menu = MenuElement({type = MENU, id = "devMordekaiser", name = "DevX Mordekaiser"})
+
+
+        self.Menu:MenuElement({type = MENU, id = "WSpell", name = "[W] Logic"})
+            self.Menu.WSpell:MenuElement({id = "Combo", name = "Combo vs Auto", toggle = true, value = false})
+            self.Menu.WSpell:MenuElement({id = "WHP", name = "Use W below HP %", value =  50, min=0, max = 100 })
+            self.Menu.WSpell:MenuElement({id = "WRange", name = "Only use when enemies within range", value = 1200, min=0, max = 2000 })
+            
+        self.Menu:MenuElement({type = MENU, id = "Combo", name = "Combo"})
+            self.Menu.Combo:MenuElement({id = "Q", name = "[Q]", toggle = true, value = true})
+            self.Menu.Combo:MenuElement({id = "E", name = "[E]", toggle = true, value = true})
+
+        self.Menu:MenuElement({type = MENU, id = "Harass", name = "Harass"})
+            self.Menu.Harass:MenuElement({id = "Q", name = "[Q]", toggle = true, value = true})
+            self.Menu.Harass:MenuElement({id = "E", name = "[E]", toggle = true, value = true})
+
+        self.Menu:MenuElement({type = MENU, id = "Clear", name = "Lane Clear"})
+            self.Menu.Clear:MenuElement({id = "Enemies", name = "Try to hit enemies", toggle = true, value = true})
+            self.Menu.Clear:MenuElement({id = "Q", name = "[Q]", toggle = true, value = true})
+            self.Menu.Clear:MenuElement({id = "E", name = "[E]", toggle = true, value = true})
+
+        self.Menu:MenuElement({type = MENU, id = "JClear", name = "Jungle Clear"})
+            self.Menu.JClear:MenuElement({id = "Q", name = "[Q]", toggle = true, value = true})
+            self.Menu.JClear:MenuElement({id = "E", name = "[E]", toggle = true, value = true})
+        
+
+    end
+
+    function Mordekaiser:Draw()
+    end
+
+
+    --------------------------------------------------
+    -- Callbacks
+    ------------
+    function Mordekaiser:onTickEvent()
+
+        if not self.Menu.WSpell.WHP:Value() and isSpellReady(_W) and myHero.health/myHero.maxHealth * 100 <= self.Menu.WSpell.WHP:Value() then
+            local numEnemies = #getEnemyHeroesWithinDistance(self.Menu.WSpell.WRange:Value())
+            if numEnemies > 0 then
+                Control.CastSpell(HK_W)
+            end
+        end
+
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+            self:Combo()
+        end
+
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_HARASS] then
+            self:Harass()
+        end
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] then
+            self:LaneClear()
+        end
+    end
+    
+    ----------------------------------------------------
+    -- Combat Modes
+    ---------------------
+    
+    function Mordekaiser:Combo()
+        if _G.SDK.Attack:IsActive() then return end
+
+        local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+        if target then
+                
+            if self.Menu.WSpell.WHP:Value() and isSpellReady(_W) and myHero.health/myHero.maxHealth * 100 <= self.Menu.WSpell.WHP:Value() then
+                Control.CastSpell(HK_W)
+            end
+
+            if self.Menu.Combo.E:Value() and isSpellReady(_E) and myHero.pos:DistanceTo(target.pos) < self.eSpell.Range then
+                castSpell(self.eSpell, HK_E, target)
+            end
+
+            if self.Menu.Combo.Q:Value() and isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < self.qSpell.Range then
+                castSpell(self.qSpell, HK_Q, target)
+            end
+
+        end
+    end
+
+
+    function Mordekaiser:Harass()
+        local target = orbwalker:GetTarget();
+        if target then
+            
+            if self.Menu.Harass.E:Value() and isSpellReady(_E) and myHero.pos:DistanceTo(target.pos) < self.eSpell.Range then
+                castSpell(self.eSpell, HK_E, target)
+            end
+            
+            if self.Menu.Harass.Q:Value() and isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < self.qSpell.Range then
+                castSpell(self.qSpell, HK_Q, target)
+            end
+
+        end
+    end
+
+    function Mordekaiser:LaneClear()
+
+        if _G.SDK.Attack:IsActive() then return end
+
+        local isJungle = true
+        local target = HealthPrediction:GetJungleTarget()
+        if target == nil then
+            isJungle = false
+
+            local bestCount = 0
+            local bestTarget = nil
+            for i = 1, GameMinionCount() do
+                local minion1 = GameMinion(i)
+                local count = 0
+                
+                if minion1 and minion1.isEnemy and not minion1.dead and minion1.pos:To2D().onScreen  then
+                    local targetPosition = minion1.pos  + Vector( minion1.pos - myHero.pos ):Normalized() * self.qSpell.Range
+                    for j = 1, GameMinionCount() do
+                        local minion2 = GameMinion(j)
+                        
+                        if minion2 and minion2.isEnemy and not minion2.dead and minion2.pos:To2D().onScreen  then
+                            local spellLine = ClosestPointOnLineSegment(minion2.pos, myHero.pos, targetPosition)
+                            
+                            if minion2.pos:DistanceTo(spellLine) < self.eSpell.Radius then
+                                count = count + 1
+                            end
+                        end
+                    end
+                    if self.Menu.Clear.Enemies:Value() then
+                        local heroes = getEnemyHeroesWithinDistance(920)
+                        if heroes then
+                            for i, enemy in pairs(heroes) do
+                                if enemy and not enemy.dead and enemy.pos:To2D().onScreen  then
+                                    local spellLine = ClosestPointOnLineSegment(enemy.pos, myHero.pos, targetPosition)
+                                    
+                                    if enemy.pos:DistanceTo(spellLine) < self.eSpell.Radius then
+                                        count = count + 2.5
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if count > bestCount then
+                        bestCount = count
+                        bestTarget = minion1
+                    end
+                end
+            end
+            target = bestTarget
+        end
+        if target ~= nil then
+
+            if isSpellReady(_E) and ((isJungle and self.Menu.JClear.E:Value()) or (not isJungle and self.Menu.Clear.E:Value())) then
+                local targetPosition = target.pos  + Vector( target.pos - myHero.pos ):Normalized() * self.eSpell.Range
+                Control.CastSpell(HK_E, targetPosition)
+            end
+            if isSpellReady(_Q) and ((isJungle and self.Menu.JClear.Q:Value()) or (not isJungle and self.Menu.Clear.Q:Value()))then
+                Control.CastSpell(HK_Q, target)
+            end
+        end
+    end
 
 ----------------------------------------------------
 -- Script starts here
