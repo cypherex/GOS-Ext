@@ -2920,8 +2920,8 @@ function Soraka:__init()
     Callback.Add("Tick", function() self:onTickEvent() end)    
        
 
-    self.qSpell = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.5, Radius = 235, Range = 800, Speed = 1750, Collision = false}
-    self.eSpell = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.5, Radius = 250, Range = 925, Speed = 1750, Collision = false}
+    self.qSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.5, Radius = 235, Range = 800, Speed = 1750, Collision = false}
+    self.eSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.5, Radius = 250, Range = 925, Speed = 1750, Collision = false}
 end
 
 --
@@ -2950,7 +2950,7 @@ end
 ------------
 function Soraka:onTickEvent()
 
-    self:authHeal()
+    self:autoHeal()
     self:EonImmobile()
 
     if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
@@ -2973,7 +2973,7 @@ function Soraka:EonImmobile()
         for i, enemy in pairs(heroes) do
             if enemy and not enemy.dead then
                 if isTargetImmobile(enemy) then
-                    Control.CastSpell(HK_E, enemy)
+                    castSpell(self.eSpellData, HK_E, enemy)
                 end
             end
         end
@@ -2984,11 +2984,11 @@ function Soraka:autoHeal()
     local healTarget = nil
     for i = 1, GameHeroCount() do
         local hero = GameHero(i)
-        if hero and not hero.dead and hero.isAlly and not hero.isMe then 
+        if hero and not hero.dead and hero.isAlly then 
             if isSpellReady(_R) and self.Menu.UltWhitelist[hero.charName]:Value() and hero.health / hero.maxHealth * 100 < self.Menu.UltHP:Value() then
                 Control.CastSpell(HK_R)
             end
-            if myHero.pos:DistanceTo(hero.pos) <= 550 and hero.health / hero.maxHealth * 100 < self.Menu.WHP:Value() then
+            if isSpellReady(_W) and not hero.isMe and hero.health / hero.maxHealth * 100 < self.Menu.WHP:Value() and myHero.pos:DistanceTo(hero.pos) <= 550  then
                 Control.CastSpell(HK_W, hero)
             end
         end
@@ -2998,8 +2998,11 @@ end
 function Soraka:Combo()
     local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
     if target then
-        if isSpellReady(_Q) then
+        if isSpellReady(_Q) and target.pos:DistanceTo(myHero.pos) < self.qSpellData.Range then
             castSpell(self.qSpellData, HK_Q, target)
+        end
+        if isSpellReady(_E) and target.pos:DistanceTo(myHero.pos) < self.eSpellData.Range then
+            castSpell(self.eSpellData, HK_E, target)
         end
     end
 end
@@ -3008,13 +3011,10 @@ end
 function Soraka:Harass()
     local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
     if target then
-        if isSpellReady(_Q) then
+        if isSpellReady(_Q) and target.pos:DistanceTo(myHero.pos) < self.qSpellData.Range then
             castSpell(self.qSpellData, HK_Q, target)
         end
         
-        if isSpellReady(_E) then
-            castSpell(self.eSpellData, HK_E, target)
-        end
     end
     
 end
