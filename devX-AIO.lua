@@ -1,5 +1,5 @@
 
-local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin","Qiyana","Karthus","Rengar", "Soraka", "Mordekaiser"}
+local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin","Qiyana","Karthus","Rengar", "Soraka", "Mordekaiser","Nidalee"}
 
 if not table.contains(Heroes, myHero.charName) then 
     print("DevX AIO does not support " .. myHero.charName)
@@ -1685,7 +1685,7 @@ function Zeri:Combo()
         end
 
         local closeEnemies = getEnemyHeroesWithinDistance(825)
-        if #closeEnemies >= self.Menu.RSpell.RCount:Value() then
+        if #closeEnemies >= self.Menu.RSpell.RCount:Value() and isSpellReady(_R) then
             Control.CastSpell(HK_R, myHero)
         end
     end
@@ -2010,6 +2010,14 @@ function LeeSin:Flee()
 
 end
 
+function LeeSin:isUltCloseEnough(targetCurrentPosition, targetUltPosition)
+    
+    local currentDelta = targetCurrentPosition  + Vector( targetCurrentPosition - myHero.pos ):Normalized() * 1200
+    local targetDelta = targetCurrentPosition  + Vector( targetCurrentPosition - targetUltPosition ):Normalized() * 1200
+
+    return currentDelta:DistanceTo(targetDelta) < 350 
+end
+
 function LeeSin:Combo()
     
 	if _nextSpellCast > Game.Timer() then return end	
@@ -2017,18 +2025,20 @@ function LeeSin:Combo()
     if self.target then
         local distance = myHero.pos:DistanceTo(self.target.pos) 
         if self.Menu.Ultimate.MultiUlt.Enabled:Value() and self.tripleUltTarget and isSpellReady(_R) then
-            local distTriple = myHero.pos.DistanceTo(self.tripleUltPos) 
+            local distTriple = myHero.pos:DistanceTo(self.tripleUltPos) 
+            local tripleUltTargDistance = myHero.pos:DistanceTo(self.tripleUltTarget)
+
             if self.Menu.Ultimate.MultiUlt.Walk:Value() and distTriple > 100 and distTriple < 200 then 
                 Control.Move(self.tripleUltPos)
                 self:delayAndDisableOrbwalker(0.2)
                 return
-            elseif self.Menu.Ultimate.MultiUlt.WardJump:Value() and distTriple > 400 and self.wardSlot then
+            elseif self.Menu.Ultimate.MultiUlt.WardJump:Value() and distTriple > 400 and self.wardSlot  then
                 self:delayAndDisableOrbwalker(0.55)
                 Control.CastSpell(self.wardKey, self.insecPosition)
                 DelayAction(function () Control.CastSpell(HK_W, self.insecPosition) end, 0.18)
                 
                 DelayAction(function () Control.CastSpell(HK_R, self.target) end, 0.38)
-            elseif distTriple < 100 then
+            elseif distTriple < 100  then
                 Control.CastSpell(HK_R, self.tripleUltTarget)
             end
         end
@@ -2036,6 +2046,15 @@ function LeeSin:Combo()
         if self.Menu.Insec.Enabled:Value() and self.insecPosition and isSpellReady(_R) and (self.flashSlot or self.wardSlot) and not self.tripleUltTarget then 
             -- ward insec    
             local distanceFromPos = myHero.pos:DistanceTo(self.insecPosition)
+            local distanceFromTarget = myHero.pos:DistanceTo(self.target.pos)
+            
+            local closeEnough = self:isUltCloseEnough(self.target.pos, self.insecPosition) and distanceFromTarget < 400
+
+            if closeEnough then
+                print("Close enough")
+                Control.CastSpell(HK_R, self.target) 
+                return
+            end
             if self.Menu.Insec.WardJump:Value() and self.wardSlot and distanceFromPos > 50 and distanceFromPos < 400 then
                 self:delayAndDisableOrbwalker(0.55)
                 Control.CastSpell(self.wardKey, self.insecPosition)
@@ -2753,15 +2772,15 @@ class "Rengar"
     -- Callbacks
     ------------
     function Rengar:onTickEvent()
-
         if doesMyChampionHaveBuff("RengarR") then
-            UltActive = true 
+            self.UltActive = true 
         else
-            UltActive = false
+            self.UltActive = false
         end
         
-        if myHero.mana == 4 and isSpellReady(_W) and isTargetImmobile(myHero)  then
-            Control.CastSpell(HK_W, myHero)
+        local isImmobile, duration = isTargetImmobile(myHero)
+        if myHero.mana == 4 and isSpellReady(_W) and isImmobile then
+            Control.CastSpell(HK_W)
         end
 
         if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
@@ -2782,55 +2801,67 @@ class "Rengar"
     -- Combat Modes
     ---------------------
     
+    function Rengar:useQ(target)
+        
 
+        Control.CastSpell(HK_Q) 
+        orbwalker:__OnAutoAttackReset()
+        DelayAction( function() orbwalker:Attack(target) end, 0.12)
+        
+        _nextSpellCast = Game.Timer() + 0.41
+    end
+
+    function Rengar:isDashing()
+        return myHero.pathing.isDashing and myHero.pathing.dashSpeed > 500
+    end
     function Rengar:Combo()
         
         self.lastMode = "combo"
         local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+        
         if target   then
 
-            if UltActive then
+            if self.UltActive then
                 if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < 850 then 
                     Control.CastSpell(HK_Q) 
                 end
-                if isSpellReady(_E) and myHero.pathing.isDashing and myHero.pathing.dashSpeed > 500 then 
+                if isSpellReady(_E) and self:isDashing() then 
                     Control.CastSpell(HK_E, target) 
                 end
             else
                 
+                local isImmobile, duration = isTargetImmobile(myHero)
+        
+                if myHero.mana == 4 and isSpellReady(_W) and isImmobile  then
+                    Control.CastSpell(HK_W, myHero)
+                end
+
                 if _G.SDK.Attack:IsActive() then return end
-                if Game.Timer() - self.lastAuto > 1 then return end
+                if Game.Timer() - self.lastAuto > 1.5 then return end
 
 
                 if isSpellReady(_Q) then 
-                    if myHero.pos:DistanceTo(target.pos) < 400 and (myHero.mana < 4 or self.Menu.EmpoweredQ:Value()) then	
-                        Control.CastSpell(HK_Q)
-
-                        DelayAction(
-                            function() 
-                                Control.Attack(target)
-                            end, 0.05
-                        )
-                        orbwalker:__OnAutoAttackReset()
-                        _nextSpellCast = Game.Timer() + 0.32
+                    if myHero.pos:DistanceTo(target.pos) < 400 and (myHero.mana < 4 or self.Menu.EmpoweredQ:Value()) and not isImmobile then	
+                        self:useQ(target)
                         return
                     end
                 end
                 
                 if _nextSpellCast > Game.Timer() then return end	
-                    if isSpellReady(_W) and myHero.mana < 4  then 
-                        if myHero.pos:DistanceTo(target.pos) < 450 then
-                            Control.CastSpell(HK_W)
-                            return
-                        end
-                    end
                     if isSpellReady(_E) then 
-                        
+                            
                         if myHero.pos:DistanceTo(target.pos) < 1000 and (myHero.mana < 4 or not self.Menu.EmpoweredQ:Value()) then
                             castSpell(self.eSpellData, HK_E, target)
                             return
                         end
                     end
+                    if isSpellReady(_W) and myHero.mana < 4 then 
+                        if myHero.pos:DistanceTo(target.pos) < 450 then
+                            Control.CastSpell(HK_W)
+                            return
+                        end
+                    end
+                    
                 end
             end
     end
@@ -2848,17 +2879,14 @@ class "Rengar"
         local target = orbwalker:GetTarget();
 
         
-        if target ~= nil and isSpellReady(_Q) then
+        local isImmobile, duration = isTargetImmobile(myHero)
+        
+        if myHero.mana == 4 and isSpellReady(_W) and isImmobile  then
+            Control.CastSpell(HK_W, myHero)
+        end
 
-            Control.CastSpell(HK_Q)
-            
-            DelayAction(
-                function() 
-                    Control.Attack(target)
-                end, 0.05
-            )
-            _nextSpellCast = Game.Timer() + 0.32
-            orbwalker:__OnAutoAttackReset()
+        if target ~= nil and isSpellReady(_Q) then
+            self:useQ(target)
             return
         end
 
@@ -2867,7 +2895,7 @@ class "Rengar"
     function Rengar:LaneClear()
 
         if _G.SDK.Attack:IsActive() then return end
-        if Game.Timer() - self.lastAuto > 1 then return end
+        if Game.Timer() - self.lastAuto > 0.6 then return end
         self.lastMode = "clear"
 
         local jungle = HealthPrediction:GetJungleTarget()
@@ -2879,14 +2907,7 @@ class "Rengar"
 
             if isSpellReady(_Q) then 
                 if myHero.pos:DistanceTo(jungle.pos) < 400 then	
-                    Control.CastSpell(HK_Q)
-                    DelayAction(
-                        function() 
-                            Control.Attack(jungle)
-                        end, 0.05
-                    )
-                    _nextSpellCast = Game.Timer() + 0.32
-                    orbwalker:__OnAutoAttackReset()
+                    self:useQ(jungle)
                     return
                 end
             end
@@ -3200,6 +3221,234 @@ class "Mordekaiser"
             end
         end
     end
+
+    
+--------------------------------------------------
+-- Nidalee
+--------------
+class "Nidalee"
+        
+function Nidalee:__init()	     
+    print("devX-Nidalee Loaded") 
+    
+    self:LoadMenu()   
+    self.rTimer = Game.Timer()
+    Callback.Add("Draw", function() self:Draw() end)           
+    Callback.Add("Tick", function() self:onTickEvent() end)    
+    orbwalker:OnPostAttack(function(...) self:onPostAttack(...) end) 
+
+    self.qSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Radius = 40, Range = 1500, Speed = 1300, Collision = true, CollisionTypes = {GGPrediction.COLLISION_MINION}}
+end
+
+--
+-- Menu 
+function Nidalee:LoadMenu() --MainMenu
+    self.Menu = MenuElement({type = MENU, id = "devNidalee", name = "DevX Nidalee"})
+
+end
+
+function Nidalee:Draw()
+end
+
+
+--------------------------------------------------
+-- Callbacks
+------------
+function Nidalee:onTickEvent()
+
+    
+
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+        self:Combo()
+    end
+
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_HARASS] then
+        self:Harass()
+    end
+    
+    if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] then
+        self:Clear()
+    end
+end
+
+----------------------------------------------------
+-- Combat Modes
+---------------------
+
+function Nidalee:onPostAttack()
+    local target = orbwalker:GetTarget();
+
+    if target then
+        local distance = myHero.pos:DistanceTo(target.pos)
+        
+        self:updateRanges()
+
+        if isSpellReady(_Q) and distance < self.qRange then
+            Control.CastSpell(HK_Q, target)
+            return
+        end
+
+        if isSpellReady(_W) and distance < self.wRange then
+            local targetPosition = target.pos
+            
+            if myHero:GetSpellData(_W).name == "Bushwhack" then
+                targetPosition = target:GetPrediction(math.huge, 0.25)
+            elseif doesThisChampionHaveBuff(target, "NidaleePassiveHunting") then
+                self.rTimer = Game.Timer() + 2.05
+            end
+            Control.CastSpell(HK_W, targetPosition)
+            return
+        end
+
+        
+        if isSpellReady(_E) and distance < self.eRange then
+            if myHero:GetSpellData(_E).name ~= "PrimalSurge" then
+                Control.CastSpell(HK_E, target)
+                return
+            end
+        end
+
+        
+
+    end
+end
+
+function Nidalee:updateRanges()
+    if myHero:GetSpellData(_Q).name == "JavelinToss" then
+        self.qRange = 1500
+    else
+        self.qRange = 400
+    end
+
+    if myHero:GetSpellData(_W).name == "Bushwhack" then
+        self.wRange = 800
+    else
+        self.wRange = 700
+    end
+
+    self.eRange = 350
+end
+
+function Nidalee:Clear()
+    self:updateRanges()
+    
+    local target = HealthPrediction:GetJungleTarget()
+    if not target then
+        target = HealthPrediction:GetLaneClearTarget()
+    end
+    if target then
+        local distance = myHero.pos:DistanceTo(target.pos)
+        
+        if self:changeUltimate(distance) then
+            Control.CastSpell(HK_R, target)
+            DelayAction(
+                    function ()
+                        orbwalker:__OnAutoAttackReset() 
+                    end
+                ,
+                0.05
+            )
+            return
+        end
+
+        if isSpellReady(_E) and distance < self.eRange then
+            if myHero:GetSpellData(_E).name == "PrimalSurge"  and myHero.health / myHero.maxHealth < 0.65 then
+                Control.CastSpell(HK_E, myHero)
+            end
+        end
+
+        if _G.SDK.Attack:IsActive() then return end
+        if isSpellReady(_Q) and distance < self.qRange then
+            Control.CastSpell(HK_Q, target)
+            return
+        end
+
+    end
+end
+
+function Nidalee:changeUltimate(distance)
+    return  isSpellReady(_R) and 
+            Game.Timer() > self.rTimer and
+            (
+                (
+                    (   
+                        not isSpellReady(_W) or distance > self.wRange
+                    ) and
+                    (
+                        not isSpellReady(_Q) or distance > self.qRange
+                    ) and 
+                    (
+                        not isSpellReady(_E) or distance > self.eRange
+                        or (myHero:GetSpellData(_E).name == "PrimalSurge" and myHero.health / myHero.maxHealth > 0.5)
+                    ) 
+                )
+                or  (
+                    not myHero:GetSpellData(_Q).name == "JavelinToss" and distance > 800
+                )
+            )   
+end
+function Nidalee:Combo()
+    local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    
+    self:updateRanges()
+    if target then
+        local distance = myHero.pos:DistanceTo(target.pos)
+        if self:changeUltimate(distance) then
+            Control.CastSpell(HK_R, target)
+            DelayAction(
+                    function ()
+                        orbwalker:__OnAutoAttackReset() 
+                    end
+                ,
+                0.05
+            )
+            return
+        end
+
+        
+        if _G.SDK.Attack:IsActive() then return end
+
+        if isSpellReady(_Q) and distance < self.qRange then
+            castSpell(self.qSpellData, HK_Q, target)
+            return
+        end
+
+        if doesThisChampionHaveBuff(target, "NidaleePassiveHunting") and myHero:GetSpellData(_Q).name == "JavelinToss" then
+            
+            Control.CastSpell(HK_R, target)
+            DelayAction(
+                    function ()
+                        orbwalker:__OnAutoAttackReset() 
+                    end
+                ,
+                0.05
+            )
+            return
+        end
+        if isSpellReady(_E) and distance < self.eRange then
+            if myHero:GetSpellData(_E).name == "PrimalSurge"  and myHero.health / myHero.maxHealth < 0.65 then
+                Control.CastSpell(HK_E, myHero)
+                return
+            end
+        end
+    end
+end
+
+
+function Nidalee:Harass()
+    local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
+    
+    self:updateRanges()
+    if target then
+        local distance = myHero.pos:DistanceTo(target.pos)
+        
+        if isSpellReady(_Q) and myHero:GetSpellData(_Q).name == "JavelinToss" and distance < self.qRange then
+            castSpell(self.qSpellData, HK_Q, target)
+            return
+        end
+    end
+end
+
 
 ----------------------------------------------------
 -- Script starts here
