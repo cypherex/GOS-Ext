@@ -1,5 +1,5 @@
 
-local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin","Qiyana","Karthus","Rengar", "Soraka", "Mordekaiser","Nidalee"}
+local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin","Qiyana","Karthus","Rengar", "Soraka", "Mordekaiser","Nidalee","Ziggs"}
 
 if not table.contains(Heroes, myHero.charName) then 
     print("DevX AIO does not support " .. myHero.charName)
@@ -84,6 +84,18 @@ local function getEnemyHeroesWithinDistanceOfUnit(location, distance)
         end
     end
     return EnemyHeroes
+end
+
+
+local function getEnemyMinionsWithinDistanceOfLocation(location, distance)
+    local EnemyMinions = {}
+    for i = 1, Game.MinionCount() do
+        local minion = Game.Minion(i)
+        if minion and minion.isEnemy and not minion.dead and minion.pos:DistanceTo(location) < distance then
+            table.insert(EnemyMinions, minion)
+        end
+    end
+    return EnemyMinions
 end
 
 
@@ -3281,7 +3293,7 @@ function Nidalee:onPostAttack()
     if target then
         local distance = myHero.pos:DistanceTo(target.pos)
         
-        self:updateRanges()
+        self:updateRanges(target)
 
         if isSpellReady(_Q) and distance < self.qRange then
             Control.CastSpell(HK_Q, target)
@@ -3313,7 +3325,7 @@ function Nidalee:onPostAttack()
     end
 end
 
-function Nidalee:updateRanges()
+function Nidalee:updateRanges(target)
     if myHero:GetSpellData(_Q).name == "JavelinToss" then
         self.qRange = 1500
     else
@@ -3323,20 +3335,24 @@ function Nidalee:updateRanges()
     if myHero:GetSpellData(_W).name == "Bushwhack" then
         self.wRange = 800
     else
-        self.wRange = 700
+        if doesThisChampionHaveBuff(target, "NidaleePassiveHunting")  then
+            self.wRange = 750
+        else
+            self.wRange = 375
+        end
     end
 
     self.eRange = 350
 end
 
 function Nidalee:Clear()
-    self:updateRanges()
     
     local target = HealthPrediction:GetJungleTarget()
     if not target then
         target = HealthPrediction:GetLaneClearTarget()
     end
     if target then
+        self:updateRanges(target)
         local distance = myHero.pos:DistanceTo(target.pos)
         
         if self:changeUltimate(distance) then
@@ -3358,11 +3374,19 @@ function Nidalee:Clear()
         end
 
         if _G.SDK.Attack:IsActive() then return end
+
+
         if isSpellReady(_Q) and distance < self.qRange then
             Control.CastSpell(HK_Q, target)
             return
         end
 
+        if isSpellReady(_E) and distance < self.eRange then
+            if myHero:GetSpellData(_E).name == "PrimalSurge"  and myHero.health / myHero.maxHealth < 0.65 then
+                Control.CastSpell(HK_E, myHero)
+                return
+            end
+        end
     end
 end
 
@@ -3390,9 +3414,9 @@ end
 function Nidalee:Combo()
     local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
     
-    self:updateRanges()
     if target then
         local distance = myHero.pos:DistanceTo(target.pos)
+        self:updateRanges(target)
         if self:changeUltimate(distance) then
             Control.CastSpell(HK_R, target)
             DelayAction(
@@ -3403,6 +3427,18 @@ function Nidalee:Combo()
                 0.05
             )
             return
+        end
+
+        
+        if isSpellReady(_W) and distance < self.wRange then
+            local targetPosition = target.pos
+            
+            if myHero:GetSpellData(_W).name == "Bushwhack" then
+            elseif doesThisChampionHaveBuff(target, "NidaleePassiveHunting") then
+                self.rTimer = Game.Timer() + 2.05
+                Control.CastSpell(HK_W, targetPosition)
+                return
+            end
         end
 
         
@@ -3425,12 +3461,15 @@ function Nidalee:Combo()
             )
             return
         end
+
         if isSpellReady(_E) and distance < self.eRange then
             if myHero:GetSpellData(_E).name == "PrimalSurge"  and myHero.health / myHero.maxHealth < 0.65 then
                 Control.CastSpell(HK_E, myHero)
                 return
             end
         end
+
+        
     end
 end
 
@@ -3449,7 +3488,160 @@ function Nidalee:Harass()
     end
 end
 
+class "Ziggs"
+    function Ziggs:__init()	     
+        print("devX-Ziggs Loaded") 
+        self:LoadMenu()   
+        
+        self.qSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Radius = 240, Range = 1400, Speed = 1700, Collision = false}
+        self.wSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.25, Radius = 325, Range = 1000, Speed = 1750, Collision = false}
+        self.eSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.25, Radius = 325, Range = 900, Speed = 1550, Collision = false}
+        self.rSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.375, Radius = 525, Range = 5000, Speed = 2250, Collision = false}
 
+        Callback.Add("Draw", function() self:Draw() end)           
+        Callback.Add("Tick", function() self:onTickEvent() end)    
+    end
+
+
+    --
+    -- Menu 
+    function Ziggs:LoadMenu() --MainMenu
+        self.Menu = MenuElement({type = MENU, id = "devZiggs", name = "devZiggs v1.0"})
+
+    end
+
+    function Ziggs:onTickEvent()
+        if isSpellReady(_R) then
+            self.AutoR()
+        end
+
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+            self:Combo()
+        end
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_HARASS] then
+            self:Harass()
+        end
+        
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] then
+            self:Clear()
+        end
+    end
+
+    function Ziggs:AutoR()
+        
+        local target = _G.SDK.TargetSelector:GetTarget(5000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+
+        if target then
+            dmg = getdmg("R", target)
+            if dmg > target.health then
+                castSpell(self.rSpellData, HK_R, target)
+            end
+        end
+    end
+
+    function Ziggs:Combo()
+            
+        local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
+        
+        if target then
+            local distance = myHero.pos:DistanceTo(target.pos)
+            if isSpellReady(_Q) and distance < self.qSpellData.Range then
+                self:useQ(target)
+            end
+
+            if isSpellReady(_E) and distance < self.eSpellData.Range then
+                castSpell(self.eSpellData, HK_E, target)
+            end
+        end
+    end
+
+    function Ziggs:Harass()
+            
+        local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
+        
+        if target then
+            local distance = myHero.pos:DistanceTo(target.pos)
+            
+            if isSpellReady(_Q) and distance < self.qSpellData.Range then
+                self:useQ(target)
+            end
+        end
+    end
+
+    function Ziggs:Clear()
+        local target = HealthPrediction:GetJungleTarget()
+        if not target then
+            target = HealthPrediction:GetLaneClearTarget()
+        end
+        if target then
+            if isSpellReady(_Q) then
+                Control.CastSpell(HK_Q, target)
+            end
+
+            if isSpellReady(_E) then
+                Control.CastSpell(HK_E, target)
+            end
+        end
+    end
+    function Ziggs:useQ(target)
+            
+        local pred = GGPrediction:SpellPrediction(self.qSpellData)
+        pred:GetPrediction(target, myHero)
+
+        if pred:CanHit(GGPrediction.HITCHANCE_NORMAL) then
+
+            local position = Vector(pred.CastPosition)
+            local unitPos = Vector(pred.UnitPosition)
+            if position:DistanceTo(unitPos) < 100 then
+                Control.CastSpell(HK_Q, position)    
+            else
+                local distance = math.min(myHero.pos:DistanceTo(position),850)
+                local direction = (position - myHero.pos):Normalized()
+                
+                local bounce1 = myHero.pos + direction * distance
+                local bounce2 = bounce1 + direction * distance * 0.6
+                local bounce3 = bounce2 + direction * distance * 0.6 * 0.4
+                
+                -- bounce 1
+                local minionsBounce1 = getEnemyMinionsWithinDistanceOfLocation(bounce1, 200)
+                if #minionsBounce1 > 0 then
+                    local minion = minionsBounce1[0]
+                    if minion and bounce1:DistanceTo(unitPos) < 240 then
+                        Control.CastSpell(HK_Q, position)
+                    else
+                        return
+                    end
+                end
+
+                -- bounce 2
+                local minionsBounce2 = getEnemyMinionsWithinDistanceOfLocation(bounce2, 200)
+                if #minionsBounce2 > 0 then
+                    local minion = minionsBounce2[0]
+                    if minion and bounce2:DistanceTo(unitPos) < 240 then
+                        Control.CastSpell(HK_Q, position)
+                    else
+                        return
+                    end
+                end
+
+                -- bounce 3
+                local minionsBounce3 = getEnemyMinionsWithinDistanceOfLocation(bounce3, 200)
+                if #minionsBounce3 > 0 then
+                    local minion = minionsBounce3[0]
+                    if minion and bounce3:DistanceTo(unitPos) < 240 then
+                        Control.CastSpell(HK_Q, position)
+                    else
+                        return
+                    end
+                end
+
+                
+                Control.CastSpell(HK_Q, position)
+            end
+
+        end
+    end
+    
 ----------------------------------------------------
 -- Script starts here
 ---------------------
