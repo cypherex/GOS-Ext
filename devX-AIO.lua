@@ -98,6 +98,22 @@ local function getEnemyMinionsWithinDistanceOfLocation(location, distance)
     return EnemyMinions
 end
 
+local function getAOEMinion(maxRange, abilityRadius) 
+    local bestCount = 0
+    local bestPosition = nil
+    for i = 1, GameMinionCount() do
+        local minion1 = GameMinion(i)
+        local count = 0
+        if minion1 and not minion1.dead and minion1.isEnemy and myHero.pos:DistanceTo(minion1.pos) < maxRange then 
+            local count = #getEnemyMinionsWithinDistanceOfLocation(minion1.pos, abilityRadius)
+            if count > bestCount then
+                bestCount = count
+                bestPosition = minion1.pos
+            end
+        end
+    end
+    return bestPosition, bestCount
+end
 
 local function getWardSlot()
     local WardKey = {[ITEM_1] = HK_ITEM_1, [ITEM_2] = HK_ITEM_2,[ITEM_3] = HK_ITEM_3, [ITEM_4] = HK_ITEM_4, [ITEM_5] = HK_ITEM_5, [ITEM_6] = HK_ITEM_6, [ITEM_7] = HK_ITEM_7}				
@@ -554,7 +570,6 @@ class "RekSai"
     -- Combat Modes
     ---------------------
     function RekSai:Combo()
-        print(Game.mapID)
         local target = _G.SDK.TargetSelector:GetTarget(1600, _G.SDK.DAMAGE_TYPE_MAGICAL);
         if isUnderground and target then
             local distance = getDistance(myHero.pos, target.pos)
@@ -3497,9 +3512,9 @@ class "Ziggs"
         self.wSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.25, Radius = 325, Range = 1000, Speed = 1750, Collision = false}
         self.eSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.25, Radius = 325, Range = 900, Speed = 1550, Collision = false}
         self.rSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 0.375, Radius = 525, Range = 5000, Speed = 2250, Collision = false}
-
-        Callback.Add("Draw", function() self:Draw() end)           
+     
         Callback.Add("Tick", function() self:onTickEvent() end)    
+        Callback.Add("Draw", function() self:Draw() end)    
     end
 
 
@@ -3508,11 +3523,25 @@ class "Ziggs"
     function Ziggs:LoadMenu() --MainMenu
         self.Menu = MenuElement({type = MENU, id = "devZiggs", name = "devZiggs v1.0"})
 
+        self.Menu:MenuElement({type = MENU, id = "Combo", name = "Combo"})
+            self.Menu.Combo:MenuElement({id = "Q", name = "[Q]", toggle = true, value = true})
+            self.Menu.Combo:MenuElement({id = "E", name = "[E]", toggle = true, value = true})
+
+        self.Menu:MenuElement({type = MENU, id = "Harass", name = "Harass"})
+            self.Menu.Harass:MenuElement({id = "Q", name = "[Q]", toggle = true, value = true})
+
+        self.Menu:MenuElement({type = MENU, id = "Clear", name = "Lane Clear"})
+            self.Menu.Clear:MenuElement({id = "Q", name = "[Q]", toggle = true, value = true, key=string.byte("T")})
+            self.Menu.Clear:MenuElement({id = "E", name = "[E]", toggle = true, value = true, key=string.byte("T")})
+
+        
+        self.Menu:MenuElement({type = MENU, id = "Draw", name = "Draw"})
+        self.Menu.Draw:MenuElement({id = "Bounce", name = "Draw Bounce Position", toggle = true, value = false})
     end
 
     function Ziggs:onTickEvent()
         if isSpellReady(_R) then
-            self.AutoR()
+            self:AutoR()
         end
 
         if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
@@ -3527,42 +3556,77 @@ class "Ziggs"
         end
     end
 
+    function Ziggs:Draw()
+        if self.Menu.Draw.Bounce:Value() then
+            local position = Vector(mousePos)
+            local distance = math.min(myHero.pos:DistanceTo(position),850)
+            local direction = (position - myHero.pos):Normalized()
+            
+            local bounce1 = myHero.pos + direction * distance
+            local bounce2 = bounce1 + direction * distance * 0.4
+            local bounce3 = bounce2 + direction * distance * 0.6 * 0.4
+
+            Draw.Circle(bounce1, 50, 1, Draw.Color(225, 225, 0, 10))
+            Draw.Circle(bounce2, 50, 1, Draw.Color(225, 225, 0, 10))
+            Draw.Circle(bounce3, 50, 1, Draw.Color(225, 225, 0, 10))
+        end
+
+    end
     function Ziggs:AutoR()
         
         local target = _G.SDK.TargetSelector:GetTarget(5000, _G.SDK.DAMAGE_TYPE_MAGICAL);
 
-        if target then
+        if target and target.pos:DistanceTo(myHero.pos) > 1400 then
             dmg = getdmg("R", target)
+
             if dmg > target.health then
-                castSpell(self.rSpellData, HK_R, target)
+
+                if target.pos:To2D().onScreen then
+                    print("Cast R")
+                    castSpell(self.rSpellData, HK_R, target)
+                    return
+                else
+                    print(target.charName)
+                end
             end
+        end
+        
+        target = _G.SDK.TargetSelector:GetTarget(500, _G.SDK.DAMAGE_TYPE_MAGICAL);
+        if target and myHero.pos:DistanceTo(target.pos) < 320 then
+            castSpell(self.wSpellData, HK_W, target)
+            DelayAction(
+                function () Control.CastSpell(HK_W) end,
+                0.1
+            )
         end
     end
 
     function Ziggs:Combo()
             
+        if _G.SDK.Attack:IsActive() then return end
         local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
         
         if target then
             local distance = myHero.pos:DistanceTo(target.pos)
-            if isSpellReady(_Q) and distance < self.qSpellData.Range then
+            if self.Menu.Combo.Q:Value() and isSpellReady(_Q) and distance < self.qSpellData.Range then
                 self:useQ(target)
             end
 
-            if isSpellReady(_E) and distance < self.eSpellData.Range then
+            if self.Menu.Combo.E:Value() and isSpellReady(_E) and distance < self.eSpellData.Range then
                 castSpell(self.eSpellData, HK_E, target)
+                
             end
         end
     end
 
     function Ziggs:Harass()
-            
+        if _G.SDK.Attack:IsActive() then return end
         local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
         
         if target then
             local distance = myHero.pos:DistanceTo(target.pos)
             
-            if isSpellReady(_Q) and distance < self.qSpellData.Range then
+            if self.Menu.Harass.Q:Value() and isSpellReady(_Q) and distance < self.qSpellData.Range then
                 self:useQ(target)
             end
         end
@@ -3574,12 +3638,19 @@ class "Ziggs"
             target = HealthPrediction:GetLaneClearTarget()
         end
         if target then
-            if isSpellReady(_Q) then
-                Control.CastSpell(HK_Q, target)
+            if self.Menu.Clear.Q:Value() and isSpellReady(_Q) then
+                bestPosition, bestCount = getAOEMinion(850, self.qSpellData.Radius)
+                if bestCount > 0 then 
+                    Control.CastSpell(HK_Q, bestPosition)
+                end
             end
 
-            if isSpellReady(_E) then
-                Control.CastSpell(HK_E, target)
+            if self.Menu.Clear.E:Value() and isSpellReady(_E) then
+                
+                bestPosition, bestCount = getAOEMinion(self.eSpellData.Range, self.eSpellData.Radius)
+                if bestCount > 2 then 
+                    Control.CastSpell(HK_E, bestPosition)
+                end
             end
         end
     end
@@ -3599,7 +3670,7 @@ class "Ziggs"
                 local direction = (position - myHero.pos):Normalized()
                 
                 local bounce1 = myHero.pos + direction * distance
-                local bounce2 = bounce1 + direction * distance * 0.6
+                local bounce2 = bounce1 + direction * distance * 0.4
                 local bounce3 = bounce2 + direction * distance * 0.6 * 0.4
                 
                 -- bounce 1
