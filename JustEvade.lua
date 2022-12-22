@@ -1874,7 +1874,7 @@ function JEvade:IsReady(spell)
 end
 
 function JEvade:MoveToPos(pos)
-	if _G.SDK and _G.Control.Evade then
+	if _G.SDK and _G.Control.Evade and self.JEMenu.Main.Evade:Value()  then
 		_G.Control.Evade(self:To3D(pos))
 	elseif self.JEMenu.Main.Evade:Value() then
 		local path = self:FixPos(pos)
