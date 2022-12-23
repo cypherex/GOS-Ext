@@ -390,13 +390,14 @@ class "TowerFarmer"
     ------------
 
     function TowerFarmer:getClosestTurret()
-        local closestTurret
+        local closestTurret = nil
         local closestDistance = 10000
-
+        
         for i = 1, GameTurretCount() do
             local turret = GameTurret(i)
-            if turret.isAlly and not turret.dead and not turret.isImmortal then
+            if turret.isAlly and not turret.dead then
                 local distance = myHero.pos:DistanceTo(turret.pos)
+
                 if distance < closestDistance then 
                     closestTurret = turret
                     closestDistance = distance
@@ -476,8 +477,8 @@ class "TowerFarmer"
     -- Adhoc  
     ------------
     function TowerFarmer:getTowerDamage()
-        minutes = Game.Timer() / 60
-        return 9 * math.floor(minutes - 1.5) + 170
+        minutes = math.min(Game.Timer() / 60, 14)
+        return 13 * math.floor(minutes) + 162
     end
     
 -------------------------------------------------

@@ -348,7 +348,7 @@ end
 -- Swain
 --------------
 class "Swain"
-    local qSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.075, Width = 100, Range = 750, Speed = 5000, Collision = false}
+    local qSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Width = 100, Range = 750, Speed = 5000, Collision = false}
     local eSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.075, Width = 60, Range = 850, Speed = 935, Collision = false}
     local wSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1, Radius = 100, Range = 5500, Speed = 935, Collision = false}
         
@@ -437,7 +437,8 @@ class "Swain"
                 end
                 
                 if distance < 1125 and doesThisChampionHaveBuff(enemy, "swaineroot") then
-                    Control.Attack(enemy)  
+                    
+                    castSpellExtended(eSpellData, HK_E, enemy, -200)
                 end
             end
         end
@@ -449,10 +450,9 @@ class "Swain"
     -- Combat Modes
     ---------------------
     function Swain:Combo()
-        local target = _G.SDK.TargetSelector:GetTarget(1000, _G.SDK.DAMAGE_TYPE_MAGICAL);
+        local target = _G.SDK.TargetSelector:GetTarget(1200, _G.SDK.DAMAGE_TYPE_MAGICAL);
             
         if target then
-
             local distance = getDistance(myHero.pos, target.pos)
             if isSpellReady(_E) and self.Menu.Combo.UseE:Value() then
                 if distance < eSpellData.Range + 100  then
@@ -4015,6 +4015,7 @@ class "Kled"
 -- Script starts here
 ---------------------
 function onLoadEvent()
+    print(myHero.charName)
     if table.contains(Heroes, myHero.charName) then
 		_G[myHero.charName]()
     else
