@@ -3060,7 +3060,7 @@ function Soraka:LoadMenu() --MainMenu
     
     for i = 1, GameHeroCount() do
         local hero = GameHero(i)
-        if hero and hero.isAlly and not hero.isMe then 
+        if hero and hero.isAlly then 
             self.Menu.UltWhitelist:MenuElement({id = hero.charName, name = hero.charName, toggle = true, value = true})
         end
     end
@@ -3110,7 +3110,7 @@ function Soraka:autoHeal()
     for i = 1, GameHeroCount() do
         local hero = GameHero(i)
         if hero and not hero.dead and hero.isAlly then 
-            if isSpellReady(_R) and self.Menu.UltWhitelist[hero.charName]:Value() and hero.health / hero.maxHealth * 100 < self.Menu.UltHP:Value() then
+            if isSpellReady(_R) and self.Menu.UltWhitelist[hero.charName] and self.Menu.UltWhitelist[hero.charName]:Value() and hero.health / hero.maxHealth * 100 < self.Menu.UltHP:Value() then
                 Control.CastSpell(HK_R)
             end
             if isSpellReady(_W) and not hero.isMe and hero.health / hero.maxHealth * 100 < self.Menu.WHP:Value() and myHero.pos:DistanceTo(hero.pos) <= 550  then
