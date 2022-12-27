@@ -3056,6 +3056,9 @@ function Soraka:LoadMenu() --MainMenu
 
     self.Menu:MenuElement({id = "WHP", name = "W Min. HP %", value = 50, min=0, max=100})
     self.Menu:MenuElement({id = "UltHP", name = "Ultimate Min. HP %", value = 20, min=0, max=100})
+    self.Menu:MenuElement({type = MENU, id = "Draw", name = "Draw"})
+        self.Menu.Draw:MenuElement({id = "Q", name = "[Q]", value = false})
+        self.Menu.Draw:MenuElement({id = "E", name = "[E]", value = false})
     self.Menu:MenuElement({type = MENU, id = "UltWhitelist", name = "Ultimate white list"})
     
     for i = 1, GameHeroCount() do
@@ -3067,6 +3070,12 @@ function Soraka:LoadMenu() --MainMenu
 end
 
 function Soraka:Draw()
+    if self.Menu.Draw.Q:Value() then
+        Draw.Circle(myHero, 790, 2, Draw.Color(255, 127, 234, 19))
+    end
+    if self.Menu.Draw.E:Value() then
+        Draw.Circle(myHero, 900, 2, Draw.Color(255, 0, 0, 0))
+    end
 end
 
 
