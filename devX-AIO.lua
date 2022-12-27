@@ -1,5 +1,5 @@
 
-local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin","Qiyana","Karthus","Rengar", "Soraka", "Mordekaiser","Nidalee","Ziggs","Kindred"}
+local Heroes = {"Swain","RekSai","Elise","Syndra","Gangplank","Gnar","Zeri","LeeSin","Qiyana","Karthus","Rengar", "Soraka", "Mordekaiser","Nidalee","Ziggs","Kindred","Viktor"}
 
 if not table.contains(Heroes, myHero.charName) then 
     print("DevX AIO does not support " .. myHero.charName)
@@ -4010,6 +4010,319 @@ class "Kled"
     function Kled:LoadMenu()
         self.Menu = MenuElement({type = MENU, id = "devKled", name = "devKled v1.0"})
 
+    end   
+
+class "Viktor"
+    function Viktor:__init()	     
+        print("devX-Viktor Loaded") 
+
+        self:LoadMenu()   
+        
+        Callback.Add("Tick", function() self:onTickEvent() end)    
+        Callback.Add("Draw", function() self:Draw() end)    
+
+        _nextSpellCast = Game.Timer()
+
+        self.lastPosition = myHero.pos
+        self.lastUlt = Game.Timer()
+        self.eUsage = { numHit = 0, startPos = nil, endPos = nil}
+
+        self.qSpellData = {Range = 600}
+        self.wSpellData = {
+            Type = GGPrediction.SPELLTYPE_CIRCLE, 
+            Delay = 1.75, 
+            Speed = math.huge, 
+            Range = 800, 
+            Radius = 270, 
+            Collision = false, 
+            CollisionTypes = {}
+        }
+        self.eSpellData = {
+            Type = GGPrediction.SPELLTYPE_LINE,
+            Delay = 0,
+            Speed = 1050,
+            Range = 700,
+            Radius = 80,
+            Collision = false, 
+            CollisionTypes = {}
+        }
+        self.rSpellData = {
+            Type = GGPrediction.SPELLTYPE_CIRCLE, 
+            Delay = 0.25, 
+            Speed = math.huge, 
+            Range = 700, 
+            Radius = 325, 
+            Collision = false, 
+            CollisionTypes = {}
+        }
+    end
+
+    function Viktor:delayAndDisableOrbwalker(delay) 
+        _nextSpellCast = Game.Timer() + delay
+        orbwalker:SetMovement(false)
+        orbwalker:SetAttack(false)
+        DelayAction(function() 
+            orbwalker:SetMovement(true)
+            orbwalker:SetAttack(true)
+        end, delay)
+    end
+
+    function Viktor:castE(startPos, endPos)
+        
+        local startMousePos = mousePos
+
+        Control.SetCursorPos(startPos)
+        DelayAction(function() Control.KeyDown(HK_E) end, 0.03)
+        DelayAction(function() Control.SetCursorPos(endPos) end, 0.09)
+        DelayAction(function() Control.KeyUp(HK_E) end, 0.12)
+        DelayAction(function() Control.SetCursorPos(startMousePos) end, 0.18)
+
+        self:delayAndDisableOrbwalker(0.5)
+    end
+
+    function Viktor:getEPosition(entityTable)
+        if #entityTable == 0 then return { numHit = 0, startPos = nil, endPos = nil} end
+
+        local bestStartPos, bestEndPos
+        local bestHit = 0
+
+        for i, entity in pairs(entityTable) do
+            for i2, entity2 in pairs(entityTable) do
+                local entityPos1 = entity:GetPrediction()
+                local entityPos2 = entity2:GetPrediction()
+
+                local endPoint = nil
+                local closePoint = nil
+                if myHero.pos:DistanceTo(entityPos1) < myHero.pos:DistanceTo(entityPos2) then 
+                    endPoint = entityPos2
+                    closePoint = entityPos1 
+                else 
+                    endPoint = entityPos1 
+                    closePoint = entityPos2
+                end
+                
+                local directionFromHero = (closePoint - myHero.pos):Normalized()
+                
+                for i = 200, 550, 50 do -- search range
+                    closePoint = myHero.pos + directionFromHero * i
+                    endPoint = closePoint + (endPoint - closePoint):Normalized() * 600
+
+                    local numHit = 0
+                    for i3, entity3 in pairs(entityTable) do
+                        
+                        local spellLine = ClosestPointOnLineSegment(entity3.pos, closePoint, endPoint)
+                        if entity3.pos:DistanceTo(spellLine) < 90 then
+                            numHit = numHit + 1
+                        end
+                    end
+                    if numHit > bestHit then
+                        bestHit = numHit
+                        bestStartPos = closePoint
+                        bestEndPos = endPoint
+                    end
+                end
+
+                
+            end
+        end
+        return {numHit = bestHit, startPos = bestStartPos, endPos = bestEndPos}
+    end
+
+    function Viktor:onTickEvent()
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
+            self:Combo()
+        end
+
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_HARASS] then
+            self:Harass()
+        end
+
+        if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_LANECLEAR] then
+            self:Clear()
+        end
+    end
+
+    function Viktor:Clear()
+        
+        if _nextSpellCast > Game.Timer() then return end
+        if not self.Menu.Clear.Enabled:Value() then return end
+
+        if doesMyChampionHaveBuff("ViktorPowerTransfer") then
+            local numMinions = #getEnemyMinionsWithinDistanceOfLocation(600);
+            if numMinions > 0 then
+                orbwalker:__OnAutoAttackReset()
+                self:delayAndDisableOrbwalker(0.2)
+                return
+            end
+        end
+
+
+        if self.Menu.Clear.E:Value() then
+            if isSpellReady(_E) then
+                local minions = getEnemyMinionsWithinDistanceOfLocation(myHero.pos, 1000)
+                self.eUsage = self:getEPosition(minions)
+                if self.eUsage.numHit > 0 then
+                    self:delayAndDisableOrbwalker(0.25)
+                    self:castE(self.eUsage.startPos, self.eUsage.endPos)
+                    return
+                end
+            end
+        end
+
+        if self.Menu.Clear.Q:Value() then
+            local minions = getEnemyMinionsWithinDistanceOfLocation(myHero.pos, 600)
+            if isSpellReady(_Q) and #minions > 0 then
+                Control.CastSpell(HK_Q, minions[0])
+            end
+        end
+    end
+
+    
+    function Viktor:Combo()
+        
+
+        if _nextSpellCast > Game.Timer() then return end
+
+        
+        if self.Menu.Combo.R2:Value() then
+            local hasUlt = doesMyChampionHaveBuff("viktorchaosstormtimer")
+            if hasUlt and self.lastUlt < Game.Timer() then
+                local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
+                if target and self.lastPosition:DistanceTo(target.pos) > 60 then
+                    Control.CastSpell(HK_R, target.pos)
+                    self.lastPosition = target.pos
+                    self.lastUlt = Game.Timer() + 0.22
+                end
+            end
+        end
+
+        if doesMyChampionHaveBuff("ViktorPowerTransfer") then
+            local target = _G.SDK.TargetSelector:GetTarget(myHero.range + myHero.boundingRadius, _G.SDK.DAMAGE_TYPE_MAGICAL);
+            if target then
+                orbwalker:__OnAutoAttackReset()
+                self:delayAndDisableOrbwalker(0.2)
+                return
+            end
+        end
+        
+        if self.Menu.Combo.Q:Value() then
+            local target = _G.SDK.TargetSelector:GetTarget(620, _G.SDK.DAMAGE_TYPE_MAGICAL);
+            if target then
+                if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < self.qSpellData.Range then
+                    Control.CastSpell(HK_Q, target)
+                    self:delayAndDisableOrbwalker(0.1)
+                    return
+                end
+            end
+        end
+
+        if self.Menu.Combo.W:Value() then
+            local target = _G.SDK.TargetSelector:GetTarget(800, _G.SDK.DAMAGE_TYPE_MAGICAL);
+            if target then
+                local enemiesAround = getEnemyHeroesWithinDistanceOfUnit(target.pos, self.wSpellData.Radius)
+                if #enemiesAround >= self.Menu.Combo.WMin:Value() then
+                    castSpell(self.wSpellData, HK_W, target)
+                end
+            end
+        end
+
+        if self.Menu.Combo.E:Value() then
+            if isSpellReady(_E) then
+                local enemies = getEnemyHeroesWithinDistance(1000)
+                if #enemies > 0 then
+                    self.eUsage = self:getEPosition(enemies)
+                    if self.eUsage.numHit > 0 then
+                        self:delayAndDisableOrbwalker(0.25)
+                        self:castE(self.eUsage.startPos, self.eUsage.endPos)
+                        return
+                    end
+                end
+            end
+        end
+        
+        
+    end
+
+    function Viktor:Harass()
+        if _nextSpellCast > Game.Timer() then return end
+
+        if doesMyChampionHaveBuff("ViktorPowerTransfer") then
+            local target = _G.SDK.TargetSelector:GetTarget(myHero.range + myHero.boundingRadius, _G.SDK.DAMAGE_TYPE_MAGICAL);
+            if target then
+                orbwalker:__OnAutoAttackReset()
+                self:delayAndDisableOrbwalker(0.2)
+                return
+            end
+        end
+        if self.Menu.Harass.Q:Value() then
+            local target = _G.SDK.TargetSelector:GetTarget(620, _G.SDK.DAMAGE_TYPE_MAGICAL);
+            if target then
+                if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < self.qSpellData.Range then
+                    Control.CastSpell(HK_Q, target)
+                    self:delayAndDisableOrbwalker(0.1)
+                    return
+                end
+            end
+        end
+        if self.Menu.Harass.E:Value() then
+            if isSpellReady(_E) then
+                local enemies = getEnemyHeroesWithinDistance(1000)
+                if #enemies > 0 then
+                    self.eUsage = self:getEPosition(enemies)
+                    if self.eUsage.numHit > 0 then
+                        self:delayAndDisableOrbwalker(0.25)
+                        self:castE(self.eUsage.startPos, self.eUsage.endPos)
+                        return
+                    end
+                end
+            end
+        end
+        
+        
+    end
+
+    function Viktor:Draw()
+        if self.Menu.Draw.EPos:Value() then
+            if self.eUsage.numHit > 0 then
+                
+                Draw.Circle(self.eUsage.startPos, 50, Draw.Color(150,0,0,255))
+                Draw.Circle(self.eUsage.endPos, 50, Draw.Color(150,150,150,255))
+                
+                Draw.Text(string.format("Number Hit: %d", self.eUsage.numHit), 10, 15, 50, Draw.Color(150,0,255,0))
+            end
+        end
+
+        if self.Menu.Draw.ClearState:Value() then
+            local hero2d = myHero.pos2D
+            if self.Menu.Clear.Enabled:Value() then
+                Draw.Text("Lane Clear Enabled [T]", 15, hero2d.x - 30, hero2d.y + 30, Draw.Color(255, 0, 255, 0))
+            else
+                Draw.Text("Lane Clear Disabled [T]", 15, hero2d.x - 30, hero2d.y + 30, Draw.Color(255, 255, 0, 0))
+            end
+        end
+    end
+
+    function Viktor:LoadMenu()
+        self.Menu = MenuElement({type = MENU, id = "devViktor", name = "devViktor v1.0"})
+        self.Menu:MenuElement({id = "Combo", name = "Combo", type = MENU})
+            self.Menu.Combo:MenuElement({id = "Q", name = "[Q]", value = true})
+            self.Menu.Combo:MenuElement({id = "W", name = "[W]", value = true})
+            self.Menu.Combo:MenuElement({id = "WMin", name = "[W] >= X Hit", value = 2, min = 1, max = 5, step = 1})
+            self.Menu.Combo:MenuElement({id = "E", name = "[E]", value = true})
+            self.Menu.Combo:MenuElement({id = "R2", name = "[R2]", value = true})
+
+        self.Menu:MenuElement({id = "Harass", name = "Harass", type = MENU})
+            self.Menu.Harass:MenuElement({id = "Q", name = "[Q]", value = true})
+            self.Menu.Harass:MenuElement({id = "E", name = "[E]", value = true})
+
+        self.Menu:MenuElement({id = "Clear", name = "Clear", type = MENU})
+            self.Menu.Clear:MenuElement({id = "Enabled", name = "Clear Enabled", value = true, toggle = true, key = string.byte("T")})
+            self.Menu.Clear:MenuElement({id = "Q", name = "[Q]", value = true})
+            self.Menu.Clear:MenuElement({id = "E", name = "[E]", value = true})
+
+        self.Menu:MenuElement({id = "Draw", name = "Draw", type = MENU})
+            self.Menu.Draw:MenuElement({id = "ClearState", name = "Clear State", value = true})
+            self.Menu.Draw:MenuElement({id = "EPos", name = "E Position", value = false})
     end   
 ----------------------------------------------------
 -- Script starts here
