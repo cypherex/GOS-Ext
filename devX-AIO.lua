@@ -4127,7 +4127,7 @@ class "Viktor"
                     if numHit > bestHit then
                         bestHit = numHit
                         bestStartPos = closePoint
-                        bestEndPos = endPoint
+                        bestEndPos = closePoint + (endPoint - closePoint):Normalized() * 300
                     end
                 end
 
@@ -4209,7 +4209,7 @@ class "Viktor"
             local target = _G.SDK.TargetSelector:GetTarget(myHero.range + myHero.boundingRadius, _G.SDK.DAMAGE_TYPE_MAGICAL);
             if target then
                 orbwalker:__OnAutoAttackReset()
-                self:delayAndDisableOrbwalker(0.2)
+                self:delayAndDisableOrbwalker(0.03)
                 return
             end
         end
@@ -4219,7 +4219,7 @@ class "Viktor"
             if target then
                 if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < self.qSpellData.Range then
                     Control.CastSpell(HK_Q, target)
-                    self:delayAndDisableOrbwalker(0.1)
+                    self:delayAndDisableOrbwalker(0.08)
                     return
                 end
             end
@@ -4259,7 +4259,7 @@ class "Viktor"
             local target = _G.SDK.TargetSelector:GetTarget(myHero.range + myHero.boundingRadius, _G.SDK.DAMAGE_TYPE_MAGICAL);
             if target then
                 orbwalker:__OnAutoAttackReset()
-                self:delayAndDisableOrbwalker(0.2)
+                self:delayAndDisableOrbwalker(0.03)
                 return
             end
         end
@@ -4268,7 +4268,7 @@ class "Viktor"
             if target then
                 if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < self.qSpellData.Range then
                     Control.CastSpell(HK_Q, target)
-                    self:delayAndDisableOrbwalker(0.1)
+                    self:delayAndDisableOrbwalker(0.08)
                     return
                 end
             end
