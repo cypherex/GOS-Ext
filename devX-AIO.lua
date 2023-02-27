@@ -99,6 +99,31 @@ local function getAllyHeroesWithinDistanceOfUnit(location, distance)
     return Allies
 end
 
+local function ClosestToMouse(p1, p2) 
+	if p1:DistanceTo(mousePos) > p2:DistanceTo(mousePos) then return p2 else return p1 end
+end
+
+local function GetClosestEnemyToMouse(maxDistance)
+    local closest = nil
+    local closestDistance = 1000000000
+    for i = 1, Game.HeroCount() do
+        local Hero = Game.Hero(i)
+        local distanceToMouse = Hero.pos:DistanceTo(Vector(mousePos))
+        if Hero.isEnemy and not Hero.dead and distanceToMouse < maxDistance then
+            if closest == nil then
+                closest = Hero.pos
+            else
+                if distanceToMouse < closest then
+                    closest = Hero.pos
+                    closestDistance = distanceToMouse
+                end
+            end
+            
+        end
+    end
+    return closest
+end
+
 local function getEnemyMinionsWithinDistanceOfLocation(location, distance)
     local EnemyMinions = {}
     for i = 1, Game.MinionCount() do
@@ -217,6 +242,19 @@ local function doesThisChampionHaveBuff(target, buffName)
     return false
 end
 
+local function isTargetImmobileOrSlowed(target)
+    local buffTypeList = {5, 7, 8, 10, 11, 12, 22, 23, 25, 30, 33, 35} 
+	for i = 0, target.buffCount do
+        local buff = target:GetBuff(i)
+        for _, buffType in pairs(buffTypeList) do
+		    if buff.type == buffType and buff.count > 0 then
+                return true, buff.duration
+            end
+		end
+	end
+	return false, 0
+end
+
 local function isTargetImmobile(target)
     local buffTypeList = {5, 8, 12, 22, 23, 25, 30, 35} 
 	for i = 0, target.buffCount do
@@ -228,6 +266,13 @@ local function isTargetImmobile(target)
 		end
 	end
 	return false, 0
+end
+
+local function getPrediction(spellData, target)
+    local pred = GGPrediction:SpellPrediction(spellData)
+    pred:GetPrediction(target, myHero)
+
+    return pred
 end
 
 local function castSpell(spellData, hotkey, target)
@@ -349,8 +394,8 @@ end
 --------------
 class "Swain"
     local qSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Width = 100, Range = 750, Speed = 5000, Collision = false}
-    local eSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.075, Width = 60, Range = 850, Speed = 935, Collision = false}
-    local wSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1, Radius = 100, Range = 5500, Speed = 935, Collision = false}
+    local eSpellData = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Width = 60, Range = 850, Speed = 935, Collision = false}
+    local wSpellData = {Type = GGPrediction.SPELLTYPE_CIRCLE, Delay = 1.5, Width = 100, Range = 5500, Speed = 935, Collision = false}
         
     function Swain:__init()	     
         print("devX-Swain Loaded") 
@@ -358,14 +403,17 @@ class "Swain"
         
         
         Callback.Add("Draw", function() self:Draw() end)           
-        Callback.Add("Tick", function() self:onTickEvent() end)    
+        Callback.Add("Tick", function() self:onTickEvent() end)   
+        Callback.Add('WndMsg', function(msg, wParam) self:onWndMsg(msg, wParam) end); 
     end
 
     --
     -- Menu 
     function Swain:LoadMenu() --MainMenu
         self.Menu = MenuElement({type = MENU, id = "devSwain", name = "devSwain v1.0"})
-                
+        
+        
+        self.Menu:MenuElement({type = MENU, id = "ManualW", name = "Manual [W] - Z Key"})
         -- ComboMenu  
         self.Menu:MenuElement({type = MENU, id = "Combo", name = "Combo Mode"})
             self.Menu.Combo:MenuElement({id = "UseQ", name = "[Q]", value = true})
@@ -375,10 +423,11 @@ class "Swain"
         self.Menu:MenuElement({type = MENU, id = "Harass", name = "Harass Mode"})
             self.Menu.Harass:MenuElement({id = "UseQ", name = "[Q]", value = true, toggle = true, key = string.byte("T")})
 
-        -- Auto Menu
+        -- Auto Menu    
         self.Menu:MenuElement({type = MENU, id = "Auto", name = "Auto"})
-            self.Menu.Auto:MenuElement{{id="PullRoot", name="Pull rooted enemies", value = true}}
+            self.Menu.Auto:MenuElement{{id= "PullRoot", name="Pull rooted enemies", value = true}}
             self.Menu.Auto:MenuElement({id = "W", name = "Use W on Root", value = true})
+            self.Menu.Auto:MenuElement({id = "WCC", name = "W on Stun/Slow", value = true})
         
             
         self.Menu:MenuElement({type = MENU, id = "Draw", name = "Draw"})
@@ -403,12 +452,43 @@ class "Swain"
     --------------------------------------------------
     -- Callbacks
     ------------
+
+    
+    function Swain:delayAndDisableOrbwalker(delay) 
+        _nextSpellCast = Game.Timer() + delay
+        orbwalker:SetMovement(false)
+        orbwalker:SetAttack(false)
+        DelayAction(function() 
+            orbwalker:SetMovement(true)
+            orbwalker:SetAttack(true)
+        end, delay)
+    end
+
+    function Swain:manualW()
+        local target = GetClosestEnemyToMouse(1000)
+        
+        if target == nil  then return end
+        if target:DistanceTo(myHero.pos) > wSpellData.Range then return end
+
+        local enemyPos = target:ToMM()
+        Control.CastSpell(HK_W, enemyPos.x, enemyPos.y)
+        self:delayAndDisableOrbwalker(0.5)
+        
+    end
+
+    function Swain:onWndMsg(msg, wParam)
+        if wParam == 90 then
+            self:manualW()
+        end
+    end
+
     function Swain:onTickEvent()
         wSpellData.Range = myHero:GetSpellData(_W).range
 
         if isSpellReady(_W) then
             self:rootCheck()
         end
+        
         if _G.SDK.Orbwalker.Modes[_G.SDK.ORBWALKER_MODE_COMBO] then
             self:Combo()
         end
@@ -430,15 +510,17 @@ class "Swain"
 
                 local distance = getDistance(myHero.pos, enemy.pos)
                 local isImmobile, duration = isTargetImmobile(enemy)
+                isImmobile = isImmobile or (not self.Menu.Auto.WCC:Value() and isTargetImmobileOrSlowed())
 
                 if isSpellReady(_W) and self.Menu.Auto.W:Value() and distance <  wSpellData.Range and isImmobile then
                     local enemyPos = enemy.pos:ToMM()
                     Control.CastSpell(HK_W, enemyPos.x, enemyPos.y)
+                    self:delayAndDisableOrbwalker(0.5)
+                    return
                 end
                 
-                if distance < 1125 and doesThisChampionHaveBuff(enemy, "swaineroot") then
-                    
-                    castSpellExtended(eSpellData, HK_E, enemy, -200)
+                if distance < 1125 and isSpellReady(_E) and doesThisChampionHaveBuff(enemy, "swaineroot") then
+                    Control.CastSpell(HK_E)
                 end
             end
         end
@@ -449,14 +531,38 @@ class "Swain"
     ----------------------------------------------------
     -- Combat Modes
     ---------------------
+
+    function Swain:CastE1(target)
+        local spellData = eSpellData
+        local pred = GGPrediction:SpellPrediction(spellData)
+        pred:GetPrediction(target, myHero)
+        if pred:CanHit(GGPrediction.HITCHANCE_NORMAL) then
+            local distanceVector =(pred.CastPosition - myHero.pos):Normalized()
+            local castPos =  myHero.pos + distanceVector * eSpellData.Range
+            
+            local _, _, collisionCount = GGPrediction:GetCollision(
+                castPos, 
+                pred.CastPosition, 
+                600, 
+                eSpellData.Delay, 
+                eSpellData.Width, 
+                {GGPrediction.COLLISION_MINION}
+            )
+            if collisionCount == 0 then
+                Control.CastSpell(HK_E, castPos)	
+            end
+        end
+    end
+
     function Swain:Combo()
+        if _nextSpellCast > Game.Timer() then return end
         local target = _G.SDK.TargetSelector:GetTarget(1200, _G.SDK.DAMAGE_TYPE_MAGICAL);
             
         if target then
             local distance = getDistance(myHero.pos, target.pos)
             if isSpellReady(_E) and self.Menu.Combo.UseE:Value() then
                 if distance < eSpellData.Range + 100  then
-                    castSpellExtended(eSpellData, HK_E, target, -200)
+                    self:CastE1(target)
                 end
             end
 
@@ -474,6 +580,8 @@ class "Swain"
         if target then
             if isSpellReady(_Q) and self.Menu.Harass.UseQ:Value() then
                 local distance = getDistance(myHero.pos, target.pos)
+
+                
                 if distance < qSpellData.Range + 100 then
                     castSpell(qSpellData, HK_Q, target)
                 end
@@ -2371,7 +2479,7 @@ class "Qiyana"
             end
         end
 
-        for i, enemy in pairs(getEnemyHeroesWithinDistance(500)) do
+        for i, enemy in pairs(getEnemyHeroesWithinDistance(600)) do
             if enemy and isValid(enemy) and not enemy.dead then
                 local distance = enemy.pos:DistanceTo(target.pos)
                 if distance < closestDistance and myHero.pos:DistanceTo(enemy.pos) < 600 then
@@ -2389,6 +2497,7 @@ class "Qiyana"
 ---------------------
     function Qiyana:performGapCloseCombo(useUlt, target)
         local bestETarget = self:findBestETarget(target)
+        print(target.pos:DistanceTo(bestETarget.pos))
         if bestETarget then
             print("Gapclose")
 
@@ -2404,17 +2513,17 @@ class "Qiyana"
 
             if willUseUltimate then
                 
-                DelayAction(function () Control.CastSpell(HK_R, target) end, 0.3)
-                DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.45)
-                DelayAction(function () self:castW(true, target) end, 0.6)
-                DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.65)
+                DelayAction(function () Control.CastSpell(HK_R, target) end, 0.35)
+                DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.48)
+                DelayAction(function () self:castW(true, target) end, 0.63)
+                DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.72)
                 self:delayAndDisableOrbwalker(1.3) 
             
             else
                 
-                DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.25)
-                DelayAction(function () self:castW(true, target) end, 0.48)
-                DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.63)
+                DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.35)
+                DelayAction(function () self:castW(true, target) end, 0.45)
+                DelayAction(function () Control.CastSpell(HK_Q, target) end, 0.64)
                 self:delayAndDisableOrbwalker(1.3) 
 
             end
@@ -2487,23 +2596,14 @@ class "Qiyana"
             local closestWall = FindClosestWall(target)
             
             local canUseUlt = closestWall ~= nil and closestWall:DistanceTo(target.pos) < 600 and isSpellReady(_R)
+            if distance < 1200 and isSpellReady(_Q) and isSpellReady(_W) and isSpellReady(_E) then
+                if self:performGapCloseCombo(canUseUlt, target) then
+                    self:delayAndDisableOrbwalker(0.4) 
+                    return
+                end 
+            end
 
-            if distance > 550 then
-                if distance < 1000 and isSpellReady(_Q) and isSpellReady(_W) and isSpellReady(_E) then
-                    if self:performGapCloseCombo(canUseUlt, target) then
-                        self:delayAndDisableOrbwalker(0.4) 
-                        return
-                    end
-                    
-                end
-            else
-                if hasElement and isSpellReady(_Q) and isSpellReady(_W) and isSpellReady(_E) then
-                    if self:performNormalCombo(canUseUlt, target) then
-                        self:delayAndDisableOrbwalker(0.4) 
-                        return
-                    end
-                end
-
+            if distance <  400 then
                 if not isSpellReady(_W) then
                     if isSpellReady(_Q) and hasElement and myHero:GetSpellData(_W).currentCd > 4.5 then
                         print("Adhoc Empowered Q")
@@ -4030,6 +4130,8 @@ class "Viktor"
         Callback.Add("Tick", function() self:onTickEvent() end)    
         Callback.Add("Draw", function() self:Draw() end)    
 
+        orbwalker:OnPostAttack(function(...) self:PostAuto(...) end) 
+
         _nextSpellCast = Game.Timer()
 
         self.lastPosition = myHero.pos
@@ -4081,25 +4183,34 @@ class "Viktor"
         local startMousePos = mousePos
 
         Control.SetCursorPos(startPos)
-        DelayAction(function() Control.KeyDown(HK_E) end, 0.03)
-        DelayAction(function() Control.SetCursorPos(endPos) end, 0.09)
-        DelayAction(function() Control.KeyUp(HK_E) end, 0.12)
-        DelayAction(function() Control.SetCursorPos(startMousePos) end, 0.18)
+        DelayAction(function() Control.KeyDown(HK_E) end, 0.07)
+        DelayAction(function() Control.SetCursorPos(endPos) end, 0.13)
+        DelayAction(function() Control.KeyUp(HK_E) end, 0.17)
+        DelayAction(function() Control.SetCursorPos(startMousePos) end, 0.26)
 
-        self:delayAndDisableOrbwalker(0.5)
+        
+        
+        self:delayAndDisableOrbwalker(0.35)
+    end
+
+    function Viktor:getTargetPredPosition(target)
+        local UnitPosition, CastPosition, TimeToHit = GGPrediction:GetPrediction(target, myHero, self.eSpellData.Speed, self.eSpellData.Delay, self.eSpellData.Radius)
+        return UnitPosition
     end
 
     function Viktor:getEPosition(entityTable)
+
         if #entityTable == 0 then return { numHit = 0, startPos = nil, endPos = nil} end
 
         local bestStartPos, bestEndPos
         local bestHit = 0
 
+
         for i, entity in pairs(entityTable) do
             for i2, entity2 in pairs(entityTable) do
-                local entityPos1 = entity:GetPrediction()
-                local entityPos2 = entity2:GetPrediction()
-
+                local entityPos1 = Vector(self:getTargetPredPosition(entity))
+                local entityPos2 = Vector(self:getTargetPredPosition(entity2))
+                
                 local endPoint = nil
                 local closePoint = nil
                 if myHero.pos:DistanceTo(entityPos1) < myHero.pos:DistanceTo(entityPos2) then 
@@ -4112,16 +4223,21 @@ class "Viktor"
                 
                 local directionFromHero = (closePoint - myHero.pos):Normalized()
                 
-                for i = 200, 550, 50 do -- search range
+                for i = 300, 550, 50 do -- search range
                     closePoint = myHero.pos + directionFromHero * i
-                    endPoint = closePoint + (endPoint - closePoint):Normalized() * 600
+                    direction = (endPoint - closePoint):Normalized()
+                    closePoint = closePoint - direction * 50
+
+                    endPoint = closePoint + direction * 550
 
                     local numHit = 0
                     for i3, entity3 in pairs(entityTable) do
-                        
-                        local spellLine = ClosestPointOnLineSegment(entity3.pos, closePoint, endPoint)
-                        if entity3.pos:DistanceTo(spellLine) < 90 then
-                            numHit = numHit + 1
+                        local ent3pos = Vector(self:getTargetPredPosition(entity3))
+                        if ent3pos then
+                            local spellLine = ClosestPointOnLineSegment(ent3pos, closePoint, endPoint)
+                            if ent3pos and spellLine and ent3pos:DistanceTo(spellLine) < 90 then
+                                numHit = numHit + 1
+                            end 
                         end
                     end
                     if numHit > bestHit then
@@ -4159,7 +4275,7 @@ class "Viktor"
         if doesMyChampionHaveBuff("ViktorPowerTransfer") then
             local numMinions = #getEnemyMinionsWithinDistanceOfLocation(600);
             if numMinions > 0 then
-                orbwalker:__OnAutoAttackReset()
+                --orbwalker:__OnAutoAttackReset()
                 self:delayAndDisableOrbwalker(0.2)
                 return
             end
@@ -4185,7 +4301,20 @@ class "Viktor"
             end
         end
     end
+    
+    function Viktor:PostAuto()
+        
+        self.lastAuto = Game.Timer()
 
+        local target = orbwalker:GetTarget();
+        if target and isSpellReady(_Q) then
+            if myHero.pos:DistanceTo(target.pos) <= self.qSpellData.Range then
+                Control.CastSpell(HK_Q, target)
+                self:delayAndDisableOrbwalker(0.08)
+                return
+            end
+        end
+    end
     
     function Viktor:Combo()
         
@@ -4201,6 +4330,7 @@ class "Viktor"
                     Control.CastSpell(HK_R, target.pos)
                     self.lastPosition = target.pos
                     self.lastUlt = Game.Timer() + 0.22
+                    return
                 end
             end
         end
@@ -4208,8 +4338,7 @@ class "Viktor"
         if doesMyChampionHaveBuff("ViktorPowerTransfer") then
             local target = _G.SDK.TargetSelector:GetTarget(myHero.range + myHero.boundingRadius, _G.SDK.DAMAGE_TYPE_MAGICAL);
             if target then
-                orbwalker:__OnAutoAttackReset()
-                self:delayAndDisableOrbwalker(0.03)
+                self:delayAndDisableOrbwalker(0.1)
                 return
             end
         end
@@ -4217,7 +4346,8 @@ class "Viktor"
         if self.Menu.Combo.Q:Value() then
             local target = _G.SDK.TargetSelector:GetTarget(620, _G.SDK.DAMAGE_TYPE_MAGICAL);
             if target then
-                if isSpellReady(_Q) and myHero.pos:DistanceTo(target.pos) < self.qSpellData.Range then
+                local distance = myHero.pos:DistanceTo(target.pos)
+                if isSpellReady(_Q) and distance < self.qSpellData.Range and distance > myHero.range then
                     Control.CastSpell(HK_Q, target)
                     self:delayAndDisableOrbwalker(0.08)
                     return
