@@ -1412,14 +1412,6 @@ function Gangplank:delayAndDisableOrbwalker(delay)
 end
 function Gangplank:Combo()
 	if _nextSpellCast > Game.Timer() then return end	
-
-    for i = 1, Game.ObjectCount() do
-        local obj = Game.Object(i)
-        local name = string.lower(obj.charName)
-        if string.match(name, "dragon") or string.match(name, "soul") then
-            print(obj.charName)
-        end
-    end
    
     local target = _G.SDK.TargetSelector:GetTarget(1500, _G.SDK.DAMAGE_TYPE_MAGICAL);
     if target == nil then return end
@@ -1444,9 +1436,9 @@ function Gangplank:Combo()
                 self:delayAndDisableOrbwalker(0.35)
                 return
             elseif myHero.pos:DistanceTo(firstBarrel.pos) < 350 then
-                Control.Move(firstBarrel.pos)
+                --Control.Move(firstBarrel.pos)
                 Control.Attack(firstBarrel)
-                self:delayAndDisableOrbwalker(1)
+                self:delayAndDisableOrbwalker(1)        
                 return
             end
         end
