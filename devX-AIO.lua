@@ -1911,6 +1911,7 @@ function LeeSin:LoadMenu() --MainMenu
         self.Menu.Insec:MenuElement({id = "MinHP", name = "Target > X% HP", min = 1, max = 100, value = 15})
         self.Menu.Insec:MenuElement({id = "WardJump", name = "Ward jump insec", value = true, toggle = true})
         self.Menu.Insec:MenuElement({id = "Flash", name = "Flash insec", value = true, toggle = true})
+        self.Menu.Insec:MenuElement({id = "FlashWard", name = "'Chinese' insec (Flash - Ward Jump)", value = true, toggle = true})
     
 
     self.Menu:MenuElement({type = MENU, id = "Ultimate", name = "Ultimate Logic"})
@@ -2237,7 +2238,7 @@ function LeeSin:Combo()
             if self.Menu.Insec.Flash:Value() and self.flashSlot and distanceFromTarget > 50 and distanceFromTarget <= 290 then
                 self:delayAndDisableOrbwalker(0.7)
                 local castDetails = canSpellHitNormal(self.qPrediction, self.target)
-                if isSpellReady(_Q) castDetails.canHit then
+                if isSpellReady(_Q) and castDetails.canHit then
                     Control.CastSpell(HK_Q, castDetails.castPos)
                     DelayAction(
                         function ()
@@ -2257,7 +2258,7 @@ function LeeSin:Combo()
                 return
             end
 
-            if self.Menu.Insec.Flash:Value() and self.flashSlot and self.Menu.Insec.WardJump:Value() and self.wardSlot and distanceFromTarget < 690 then
+            if self.Menu.Insec.FlashWard:Value() and self.flashSlot and self.wardSlot and distanceFromTarget < 690 then
                 
                 local castDetails = canSpellHitNormal(self.qPrediction, self.target)
                 if isSpellReady(_Q) and castDetails.canHit then
