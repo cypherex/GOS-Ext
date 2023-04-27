@@ -285,7 +285,7 @@ end
 
 local function castSpell(spellData, hotkey, target)
 
-    local castDetails = canSpellHitNormal(self.qSpellData, self.target)
+    local castDetails = canSpellHitNormal(spellData, target)
     if castDetails.canHit then
         if myHero.pos:DistanceTo(pred.CastPosition) <= spellData.Range + 15 then
             Control.CastSpell(hotkey, pred.CastPosition)	
@@ -1871,13 +1871,17 @@ end
 class "LeeSin"
         
 function LeeSin:__init()	     
-    print("devX-LeeSin Loaded2") 
+    print("devX-LeeSin Loaded") 
     self:LoadMenu()   
     
     self.qPrediction = {Type = GGPrediction.SPELLTYPE_LINE, Delay = 0.25, Radius = 60, Range = 1200, Speed = 1800, Collision = true, CollisionTypes = {GGPrediction.COLLISION_MINION}}
     
     Callback.Add("Tick", function() self:onTickEvent() end)    
     Callback.Add("Draw", function() self:onDrawEvent() end)
+
+    self.state = "idle"
+    self.substate = "idle"
+
     self.nextQTimer = Game.Timer()
     self.passiveCount = 0
     
@@ -1940,19 +1944,19 @@ function LeeSin:onDrawEvent()
         Draw.Circle(self.insecAlly.pos, 50, 1,  Draw.Color(255,0,255,0))
         Draw.Circle(self.insecPosition, 50, 1,  Draw.Color(255,0,0,255))
         
-        if self.target then
+        if self.target and self.insecPosition then
             target2d = self.target.pos2D
+            local insec2d = self.insecPosition:To2D()
             Draw.Text("Flash Insec Range", 7, target2d.x, target2d.y + 30, Draw.Color(255, 255, 255, 255))
             Draw.Circle(self.target.pos, 260, 1,  Draw.Color(255,255,0,0))
-            Draw.Text("Ward Hop Insec Range", 7, target2d.x, target2d.y + 130, Draw.Color(255, 255, 255, 255))
-            Draw.Circle(self.target.pos, 410, 1,  Draw.Color(255,0,255,0))
-            Draw.Text("Chinese Range", 7, target2d.x, target2d.y + 250, Draw.Color(255, 255, 255, 255))
-            Draw.Circle(self.target.pos, 690, 1,  Draw.Color(255,0,0,255))
+            Draw.Text("Ward Hop Insec Range", 7, insec2d.x, insec2d.y + 230, Draw.Color(255, 255, 255, 255))
+            Draw.Circle(self.insecPosition, 700, 1,  Draw.Color(255,0,255,0))
+            Draw.Text("Chinese Range", 7, insec2d.x, insec2d.y + 450, Draw.Color(255, 255, 255, 255))
+            Draw.Circle(self.insecPosition, 1100, 1,  Draw.Color(255,0,0,255))
         end
     end
     if self.tripleUltTarget then
-       -- Draw.Circle(self.tripleUltPos, 50, 1,  Draw.Color(255,0,0,255))
-       -- Draw.Circle(self.tripleUltTarget.pos, 50, 1,  Draw.Color(255,255,0,0))
+       Draw.Circle(self.tripleUltPos, 50, 1,  Draw.Color(255,255,255,255))
     end
 end
 
@@ -2144,6 +2148,15 @@ function LeeSin:delayAndDisableOrbwalker(delay)
         orbwalker:SetAttack(true)
     end, delay)
 end
+
+function LeeSin:disableOrbwalker(delay) 
+    orbwalker:SetMovement(false)
+    orbwalker:SetAttack(false)
+    DelayAction(function() 
+        orbwalker:SetMovement(true)
+        orbwalker:SetAttack(true)
+    end, delay)
+end
 ----------------------------------------------------
 -- Combat Modes
 ---------------------
@@ -2226,12 +2239,14 @@ function LeeSin:Combo()
                 Control.CastSpell(HK_R, self.target) 
                 return
             end
-            if self.Menu.Insec.WardJump:Value() and self.wardSlot and distanceFromPos > 50 and distanceFromTarget <= 460 then
-                self:delayAndDisableOrbwalker(1)
+            if self.Menu.Insec.WardJump:Value() and self.wardSlot and distanceFromPos > 50 and distanceFromPos <= 700 then
+                local extraDelay = 0.005 * (distanceFromPos - 290) / 100
+                print(extraDelay)
+                self:delayAndDisableOrbwalker(1 + extraDelay)
                 Control.CastSpell(self.wardKey, self.insecPosition)
-                DelayAction(function () Control.CastSpell(HK_W, self.insecPosition) end, 0.25)
+                DelayAction(function () Control.CastSpell(HK_W, self.insecPosition) end, 0.25 + extraDelay)
                 
-                DelayAction(function () Control.CastSpell(HK_R, self.target) end, 0.42)
+                DelayAction(function () Control.CastSpell(HK_R, self.target) end, 0.42 + extraDelay)
                 return
             end
 
@@ -2258,32 +2273,27 @@ function LeeSin:Combo()
                 return
             end
 
-            if self.Menu.Insec.FlashWard:Value() and self.flashSlot and self.wardSlot and distanceFromTarget < 690 then
+            if self.Menu.Insec.FlashWard:Value() and self.flashSlot and self.wardSlot and distanceFromPos < 1100 then
                 
                 local castDetails = canSpellHitNormal(self.qPrediction, self.target)
+                local extraDelay = 0.05 * (distanceFromPos - 700) / 100
+                
                 if isSpellReady(_Q) and castDetails.canHit then
-                    self:delayAndDisableOrbwalker(1.6)
-                    --Control.CastSpell(HK_Q, castDetails.castPos)
-                    --DelayAction(function () Control.CastSpell(self.wardKey, self.insecPosition) end, 0.2)
-                    --DelayAction(function () Control.CastSpell(self.flashKey, self.insecPosition) end, 0.4)
-                    --DelayAction(function () Control.CastSpell(HK_W, self.insecPosition) end, 0.62)
-                    --DelayAction(function () Control.CastSpell(HK_R, self.target) end, 0.82)
-                    --DelayAction(function () Control.CastSpell(HK_Q) end, 1.4)
+                    self:delayAndDisableOrbwalker(1.6 + extraDelay)
 
                     Control.CastSpell(HK_Q, castDetails.castPos)
-                    DelayAction(function () Control.CastSpell(self.wardKey, self.insecPosition) end, 0.2)
-                    DelayAction(function () Control.CastSpell(self.flashKey, self.insecPosition) end, 0.4)
-                    DelayAction(function () Control.CastSpell(HK_W, self.insecPosition) end, 0.55)
-                    DelayAction(function () Control.CastSpell(HK_R, self.target) end, 0.74)
-                    DelayAction(function () Control.CastSpell(HK_Q) end, 1.4)
+                    DelayAction(function () Control.CastSpell(self.wardKey, self.insecPosition) end, 0.2 + extraDelay)
+                    DelayAction(function () Control.CastSpell(self.flashKey, self.insecPosition) end, 0.4 + extraDelay)
+                    DelayAction(function () Control.CastSpell(HK_W, self.insecPosition) end, 0.55 + extraDelay)
+                    DelayAction(function () Control.CastSpell(HK_R, self.target) end, 0.74 + extraDelay)
+                    DelayAction(function () Control.CastSpell(HK_Q) end, 1.4 + extraDelay)
                 else
-                    
-                    self:delayAndDisableOrbwalker(1.3)
+                    self:delayAndDisableOrbwalker(1.3 + extraDelay)
                     Control.CastSpell(self.wardKey, self.insecPosition)
-                    DelayAction(function () Control.CastSpell(self.flashKey, self.insecPosition) end, 0.2)
-                    DelayAction(function () Control.CastSpell(HK_W, self.insecPosition) end, 0.42)
-                    DelayAction(function () Control.CastSpell(HK_R, self.target) end, 0.62)
-                    DelayAction(function () Control.CastSpell(HK_Q, self.target) end, 0.92)
+                    DelayAction(function () Control.CastSpell(self.flashKey, self.insecPosition) end, 0.2 + extraDelay)
+                    DelayAction(function () Control.CastSpell(HK_W, self.insecPosition) end, 0.42 + extraDelay)
+                    DelayAction(function () Control.CastSpell(HK_R, self.target) end, 0.62 + extraDelay)
+                    DelayAction(function () Control.CastSpell(HK_Q, self.target) end, 0.92 + extraDelay)
                 end
                 return
             end
